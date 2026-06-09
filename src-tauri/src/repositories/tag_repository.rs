@@ -1,6 +1,7 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
+use uuid::Uuid;
 
-use crate::models::PresetTag;
+use crate::models::{CreateTagPayload, PresetTag, Tag, TagUsage, UpdateTagPayload};
 
 const DEFAULT_TAGS: &[PresetTag] = &[
     PresetTag::new("人像", "subject", "#F97316"),
@@ -91,4 +92,216 @@ pub fn preset_tag_count() -> usize {
 
 fn preset_tag_id(name: &str, category: &str) -> String {
     format!("preset:{}:{}", category, name)
+}
+
+pub fn list_tags(connection: &Connection, category: Option<&str>) -> rusqlite::Result<Vec<Tag>> {
+    if let Some(category) = category.map(str::trim).filter(|value| !value.is_empty()) {
+        let mut statement = connection.prepare(
+            "
+            SELECT id, name, category, color, is_preset, created_at, updated_at
+            FROM tags
+            WHERE category = ?1
+            ORDER BY category ASC, is_preset DESC, name ASC
+            ",
+        )?;
+        return statement
+            .query_map([category], map_tag)?
+            .collect::<rusqlite::Result<Vec<_>>>();
+    }
+
+    let mut statement = connection.prepare(
+        "
+        SELECT id, name, category, color, is_preset, created_at, updated_at
+        FROM tags
+        ORDER BY category ASC, is_preset DESC, name ASC
+        ",
+    )?;
+
+    let tags = statement
+        .query_map([], map_tag)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(tags)
+}
+
+pub fn create_custom_tag(
+    connection: &Connection,
+    payload: &CreateTagPayload,
+    category: &str,
+) -> rusqlite::Result<Tag> {
+    let id = Uuid::new_v4().to_string();
+
+    connection.execute(
+        "
+        INSERT INTO tags (
+          id,
+          name,
+          category,
+          color,
+          is_preset,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ?1,
+          ?2,
+          ?3,
+          ?4,
+          0,
+          strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+          strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        )
+        ",
+        params![
+            id,
+            payload.name.trim(),
+            category,
+            normalize_optional_text(&payload.color),
+        ],
+    )?;
+
+    get_tag(connection, &id)?.ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)
+}
+
+pub fn update_tag(
+    connection: &Connection,
+    id: &str,
+    payload: &UpdateTagPayload,
+    category: &str,
+) -> rusqlite::Result<Option<Tag>> {
+    let updated_count = connection.execute(
+        "
+        UPDATE tags
+        SET
+          name = ?2,
+          category = ?3,
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ?1
+        ",
+        params![id, payload.name.trim(), category],
+    )?;
+
+    if updated_count == 0 {
+        return Ok(None);
+    }
+
+    get_tag(connection, id)
+}
+
+pub fn update_tag_color(
+    connection: &Connection,
+    id: &str,
+    color: Option<&str>,
+) -> rusqlite::Result<Option<Tag>> {
+    let updated_count = connection.execute(
+        "
+        UPDATE tags
+        SET
+          color = ?2,
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ?1
+        ",
+        params![id, color],
+    )?;
+
+    if updated_count == 0 {
+        return Ok(None);
+    }
+
+    get_tag(connection, id)
+}
+
+pub fn delete_tag(connection: &Connection, id: &str) -> rusqlite::Result<bool> {
+    let deleted_count = connection.execute("DELETE FROM tags WHERE id = ?1", [id])?;
+    Ok(deleted_count > 0)
+}
+
+pub fn get_tag(connection: &Connection, id: &str) -> rusqlite::Result<Option<Tag>> {
+    connection
+        .query_row(
+            "
+            SELECT id, name, category, color, is_preset, created_at, updated_at
+            FROM tags
+            WHERE id = ?1
+            ",
+            [id],
+            map_tag,
+        )
+        .optional()
+}
+
+pub fn find_tag_by_name_and_category(
+    connection: &Connection,
+    name: &str,
+    category: &str,
+) -> rusqlite::Result<Option<Tag>> {
+    connection
+        .query_row(
+            "
+            SELECT id, name, category, color, is_preset, created_at, updated_at
+            FROM tags
+            WHERE name = ?1 AND category = ?2
+            ",
+            params![name.trim(), category],
+            map_tag,
+        )
+        .optional()
+}
+
+pub fn list_tags_by_inspiration_usage(connection: &Connection) -> rusqlite::Result<Vec<TagUsage>> {
+    let mut statement = connection.prepare(
+        "
+        SELECT
+          tags.id,
+          tags.name,
+          tags.category,
+          tags.color,
+          tags.is_preset,
+          tags.created_at,
+          tags.updated_at,
+          COUNT(inspiration_card_tags.inspiration_card_id) AS usage_count
+        FROM tags
+        LEFT JOIN inspiration_card_tags
+          ON inspiration_card_tags.tag_id = tags.id
+        GROUP BY tags.id
+        ORDER BY usage_count DESC, tags.category ASC, tags.name ASC
+        ",
+    )?;
+
+    let usages = statement
+        .query_map([], |row| {
+            Ok(TagUsage {
+                tag: Tag {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    category: row.get(2)?,
+                    color: row.get(3)?,
+                    is_preset: row.get::<_, i64>(4)? == 1,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                },
+                usage_count: row.get(7)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(usages)
+}
+
+fn map_tag(row: &rusqlite::Row<'_>) -> rusqlite::Result<Tag> {
+    Ok(Tag {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        category: row.get(2)?,
+        color: row.get(3)?,
+        is_preset: row.get::<_, i64>(4)? == 1,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
+}
+
+fn normalize_optional_text(value: &Option<String>) -> Option<String> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }

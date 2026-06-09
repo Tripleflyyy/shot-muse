@@ -2684,6 +2684,7 @@ dependencies = [
  "serde",
  "tauri",
  "tauri-build",
+ "uuid",
 ]
 
 [[package]]

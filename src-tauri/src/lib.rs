@@ -13,7 +13,18 @@ pub fn app_builder(app_state: AppState) -> tauri::Builder<tauri::Wry> {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::app_commands::get_app_status,
-            commands::app_commands::health_check
+            commands::app_commands::health_check,
+            commands::project_commands::create_project,
+            commands::project_commands::update_project,
+            commands::project_commands::delete_project,
+            commands::project_commands::get_project,
+            commands::project_commands::list_projects,
+            commands::tag_commands::list_tags,
+            commands::tag_commands::create_custom_tag,
+            commands::tag_commands::update_tag,
+            commands::tag_commands::update_tag_color,
+            commands::tag_commands::delete_tag,
+            commands::tag_commands::list_tags_by_usage
         ])
 }
 
@@ -27,7 +38,18 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_commands::get_app_status,
-            commands::app_commands::health_check
+            commands::app_commands::health_check,
+            commands::project_commands::create_project,
+            commands::project_commands::update_project,
+            commands::project_commands::delete_project,
+            commands::project_commands::get_project,
+            commands::project_commands::list_projects,
+            commands::tag_commands::list_tags,
+            commands::tag_commands::create_custom_tag,
+            commands::tag_commands::update_tag,
+            commands::tag_commands::update_tag_color,
+            commands::tag_commands::delete_tag,
+            commands::tag_commands::list_tags_by_usage
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Shot Muse Tauri application");
