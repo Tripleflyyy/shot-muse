@@ -52,6 +52,17 @@ impl AppState {
     pub fn database_path(&self) -> &Path {
         &self.database_path
     }
+
+    pub fn with_connection<T>(
+        &self,
+        action: impl FnOnce(&Connection) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<T> {
+        let connection = self.connection.lock().map_err(|_| {
+            rusqlite::Error::InvalidParameterName("database connection lock poisoned".into())
+        })?;
+
+        action(&connection)
+    }
 }
 
 fn initialize_app_data_dirs(app_data_dir: &Path) -> rusqlite::Result<()> {
