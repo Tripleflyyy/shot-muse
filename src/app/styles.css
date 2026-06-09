@@ -182,3 +182,31 @@ a {
   font-size: 14px;
   line-height: 1.5;
 }
+
+.status-list {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0 0;
+}
+
+.status-list div {
+  display: grid;
+  gap: 4px;
+}
+
+.status-list dt {
+  color: #7a7066;
+  font-size: 12px;
+}
+
+.status-list dd {
+  min-width: 0;
+  margin: 0;
+  color: #2f2a25;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.status-list__path {
+  overflow-wrap: anywhere;
+}

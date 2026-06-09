@@ -115,6 +115,8 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_tags_category
         ON tags(category);
+
+        PRAGMA user_version = 1;
         ",
     )
 }

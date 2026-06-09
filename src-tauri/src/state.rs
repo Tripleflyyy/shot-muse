@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -14,6 +15,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn initialize(app_data_dir: impl AsRef<Path>) -> rusqlite::Result<Self> {
+        initialize_app_data_dirs(app_data_dir.as_ref())?;
         let database_path = db::initialize_database(app_data_dir)?;
         let connection = db::connect(&database_path)?;
 
@@ -50,4 +52,26 @@ impl AppState {
     pub fn database_path(&self) -> &Path {
         &self.database_path
     }
+}
+
+fn initialize_app_data_dirs(app_data_dir: &Path) -> rusqlite::Result<()> {
+    fs::create_dir_all(app_data_dir).map_err(io_error_to_sqlite)?;
+
+    for relative_path in [
+        "database",
+        "media/inspiration",
+        "media/technique",
+        "media/project",
+        "media/plan",
+        "exports",
+        "backups",
+    ] {
+        fs::create_dir_all(app_data_dir.join(relative_path)).map_err(io_error_to_sqlite)?;
+    }
+
+    Ok(())
+}
+
+fn io_error_to_sqlite(error: std::io::Error) -> rusqlite::Error {
+    rusqlite::Error::ToSqlConversionFailure(Box::new(error))
 }
