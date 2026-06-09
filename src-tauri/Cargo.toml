@@ -1,0 +1,20 @@
+[package]
+name = "shot-muse"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "shot_muse"
+path = "src/lib.rs"
+
+[[bin]]
+name = "shot-muse"
+path = "src/main.rs"
+
+[dependencies]
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
