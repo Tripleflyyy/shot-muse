@@ -33,7 +33,15 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<boolean> {
-  return invoke<boolean>("delete_project", { id });
+  if (!id?.trim()) {
+    throw new Error("项目 ID 不能为空，无法删除");
+  }
+
+  const deleted = await invoke<boolean>("delete_project", { id });
+  if (!deleted) {
+    throw new Error("未找到要删除的摄影项目");
+  }
+  return deleted;
 }
 
 export async function getProject(id: string): Promise<Project> {

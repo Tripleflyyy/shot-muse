@@ -36,37 +36,70 @@ export type UpdateTagPayload = {
 };
 
 export async function listTags(category?: TagCategory): Promise<Tag[]> {
-  return invoke<Tag[]>("list_tags", { category });
+  const tags = await invoke<RawTag[]>("list_tags", { category });
+  return tags.map(normalizeTag);
 }
 
 export async function createCustomTag(
   payload: CreateTagPayload,
 ): Promise<Tag> {
-  return invoke<Tag>("create_custom_tag", { payload });
+  const tag = await invoke<RawTag>("create_custom_tag", { payload });
+  return normalizeTag(tag);
 }
 
 export async function updateTag(
   id: string,
   payload: UpdateTagPayload,
 ): Promise<Tag> {
-  return invoke<Tag>("update_tag", { id, payload });
+  const tag = await invoke<RawTag>("update_tag", { id, payload });
+  return normalizeTag(tag);
 }
 
 export async function updateTagColor(
   id: string,
   color?: string | null,
 ): Promise<Tag> {
-  return invoke<Tag>("update_tag_color", { id, color });
+  const tag = await invoke<RawTag>("update_tag_color", { id, color });
+  return normalizeTag(tag);
 }
 
 export async function deleteTag(id: string): Promise<boolean> {
-  return invoke<boolean>("delete_tag", { id });
+  if (!id?.trim()) {
+    throw new Error("标签 ID 不能为空，无法删除");
+  }
+
+  const deleted = await invoke<boolean>("delete_tag", { id });
+  if (!deleted) {
+    throw new Error("未找到要删除的标签");
+  }
+  return deleted;
 }
 
 export async function listTagsByUsage(
   targetType: "inspiration" = "inspiration",
 ): Promise<TagUsage[]> {
-  return invoke<TagUsage[]>("list_tags_by_usage", {
-    targetType,
-  });
+  const usages = await invoke<Array<{ tag: RawTag; usage_count: number }>>(
+    "list_tags_by_usage",
+    {
+      targetType,
+    },
+  );
+  return usages.map((usage) => ({
+    ...usage,
+    tag: normalizeTag(usage.tag),
+  }));
+}
+
+type RawTag = Omit<Tag, "is_preset"> & {
+  is_preset?: boolean | number | string;
+  isPreset?: boolean | number | string;
+};
+
+function normalizeTag(tag: RawTag): Tag {
+  const isPresetValue = tag.is_preset ?? tag.isPreset ?? false;
+  return {
+    ...tag,
+    is_preset:
+      isPresetValue === true || isPresetValue === 1 || isPresetValue === "1",
+  };
 }

@@ -190,3 +190,59 @@ fn normalize_optional_text(value: &Option<String>) -> Option<String> {
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrations;
+
+    fn test_connection() -> Connection {
+        let connection = Connection::open_in_memory().expect("open in-memory database");
+        migrations::run_migrations(&connection).expect("run migrations");
+        connection
+    }
+
+    #[test]
+    fn create_search_update_and_delete_project() {
+        let connection = test_connection();
+        let created = create_project(
+            &connection,
+            &ProjectPayload {
+                name: "测试人像拍摄".into(),
+                theme: Some("人像练习".into()),
+                description: Some("午后自然光".into()),
+                location: None,
+                planned_shooting_time: None,
+                notes: None,
+            },
+        )
+        .expect("create project");
+
+        let search_results = list_projects(&connection, Some("人像")).expect("search projects");
+        assert_eq!(search_results.len(), 1);
+        assert_eq!(search_results[0].id, created.id);
+
+        let updated = update_project(
+            &connection,
+            &created.id,
+            &ProjectPayload {
+                name: "测试人像拍摄".into(),
+                theme: Some("胶片人像".into()),
+                description: Some("编辑后的描述".into()),
+                location: Some("公园".into()),
+                planned_shooting_time: None,
+                notes: Some("带反光板".into()),
+            },
+        )
+        .expect("update project")
+        .expect("updated project exists");
+        assert_eq!(updated.theme.as_deref(), Some("胶片人像"));
+        assert_eq!(updated.location.as_deref(), Some("公园"));
+
+        assert!(delete_project(&connection, &created.id).expect("delete project"));
+        assert!(get_project(&connection, &created.id)
+            .expect("get deleted project")
+            .is_none());
+        assert!(!delete_project(&connection, &created.id).expect("delete missing project"));
+    }
+}

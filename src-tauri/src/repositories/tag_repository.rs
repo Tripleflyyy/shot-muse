@@ -305,3 +305,66 @@ fn normalize_optional_text(value: &Option<String>) -> Option<String> {
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrations;
+
+    fn test_connection() -> Connection {
+        let connection = Connection::open_in_memory().expect("open in-memory database");
+        migrations::run_migrations(&connection).expect("run migrations");
+        migrations::seed_default_tags(&connection).expect("seed preset tags");
+        connection
+    }
+
+    #[test]
+    fn create_update_and_delete_custom_tag() {
+        let connection = test_connection();
+        let created = create_custom_tag(
+            &connection,
+            &CreateTagPayload {
+                name: "电影感测试".into(),
+                category: Some("custom".into()),
+                color: Some("#FFAA00".into()),
+            },
+            "custom",
+        )
+        .expect("create custom tag");
+        assert!(!created.is_preset);
+
+        let updated = update_tag(
+            &connection,
+            &created.id,
+            &UpdateTagPayload {
+                name: "电影色调测试".into(),
+                category: Some("color".into()),
+            },
+            "color",
+        )
+        .expect("update custom tag")
+        .expect("updated tag exists");
+        assert_eq!(updated.name, "电影色调测试");
+        assert_eq!(updated.category, "color");
+
+        let recolored = update_tag_color(&connection, &created.id, Some("#00AAFF"))
+            .expect("update tag color")
+            .expect("recolored tag exists");
+        assert_eq!(recolored.color.as_deref(), Some("#00AAFF"));
+
+        assert!(delete_tag(&connection, &created.id).expect("delete custom tag"));
+        assert!(get_tag(&connection, &created.id)
+            .expect("get deleted tag")
+            .is_none());
+        assert!(!delete_tag(&connection, &created.id).expect("delete missing tag"));
+    }
+
+    #[test]
+    fn preset_tags_are_marked_as_preset() {
+        let connection = test_connection();
+        let preset_tags = list_tags(&connection, Some("subject")).expect("list preset tags");
+        assert!(preset_tags
+            .iter()
+            .any(|tag| tag.name == "人像" && tag.is_preset));
+    }
+}
