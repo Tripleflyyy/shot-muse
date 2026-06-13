@@ -194,7 +194,7 @@ pub fn list_inspiration_cards(
         }
 
         if let Some(keyword) = keyword.as_deref() {
-            let haystack = [
+            let mut searchable_parts = [
                 Some(card.title.as_str()),
                 card.author_name.as_deref(),
                 card.notes.as_deref(),
@@ -202,9 +202,11 @@ pub fn list_inspiration_cards(
             ]
             .into_iter()
             .flatten()
-            .collect::<Vec<_>>()
-            .join("\n")
-            .to_lowercase();
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+            searchable_parts.extend(card.tags.iter().map(|tag| tag.name.clone()));
+
+            let haystack = searchable_parts.join("\n").to_lowercase();
 
             if !haystack.contains(keyword) {
                 continue;
@@ -710,5 +712,18 @@ mod tests {
         .expect("filter by any tag");
         assert_eq!(any_tag_filtered.len(), 1);
         assert_eq!(any_tag_filtered[0].title, "夜景霓虹参考");
+
+        let tag_keyword_filtered = list_inspiration_cards(
+            &connection,
+            &InspirationCardFilters {
+                project_id: None,
+                source_platform: None,
+                keyword: Some("筛选标签 B".into()),
+                tag_ids: None,
+            },
+        )
+        .expect("filter by tag name keyword");
+        assert_eq!(tag_keyword_filtered.len(), 1);
+        assert_eq!(tag_keyword_filtered[0].title, "夜景霓虹参考");
     }
 }

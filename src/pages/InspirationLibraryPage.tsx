@@ -23,7 +23,6 @@ type InspirationFormState = {
 type InspirationFiltersState = {
   source_platform: "" | SourcePlatform;
   keyword: string;
-  tag_id: string;
 };
 
 const sourcePlatforms: Array<{ value: SourcePlatform; label: string }> = [
@@ -47,7 +46,6 @@ const emptyForm: InspirationFormState = {
 const emptyFilters: InspirationFiltersState = {
   source_platform: "",
   keyword: "",
-  tag_id: "",
 };
 
 const tagCategories: Array<{ value: TagCategory; label: string }> = [
@@ -101,7 +99,7 @@ export default function InspirationLibraryPage() {
       const data = await listInspirationCards({
         source_platform: nextFilters.source_platform || null,
         keyword: optionalText(nextFilters.keyword),
-        tag_ids: nextFilters.tag_id ? [nextFilters.tag_id] : [],
+        tag_ids: [],
       });
       setCards(data);
     } catch (error) {
@@ -353,13 +351,9 @@ export default function InspirationLibraryPage() {
 
         <section className="list-panel">
           <form className="filter-panel" onSubmit={handleFilterSubmit}>
-            <div className="filter-panel-title">
-              <strong>搜索灵感</strong>
-              <span>{cards.length} 条结果</span>
-            </div>
-            <div className="filter-search-row">
+            <div className="search-filter-bar">
               <input
-                className="filter-search"
+                className="search-filter-input"
                 value={filters.keyword}
                 onChange={(event) =>
                   setFilters((current) => ({
@@ -367,65 +361,37 @@ export default function InspirationLibraryPage() {
                     keyword: event.target.value,
                   }))
                 }
-                placeholder="搜索灵感标题 / 作者 / 备注 / 链接"
+                placeholder="搜索标题 / 作者 / 备注 / 链接 / 标签..."
               />
+              <select
+                className="search-filter-select"
+                value={filters.source_platform}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    source_platform: event.target.value as "" | SourcePlatform,
+                  }))
+                }
+              >
+                <option value="">全部平台</option>
+                {sourcePlatforms.map((platform) => (
+                  <option key={platform.value} value={platform.value}>
+                    {platform.label}
+                  </option>
+                ))}
+              </select>
+              <button className="search-filter-button" type="submit">
+                筛选
+              </button>
+              <button
+                className="search-filter-reset"
+                type="button"
+                onClick={clearFilters}
+              >
+                清空
+              </button>
             </div>
-
-            <div className="filter-panel-title filter-panel-title--subtle">
-              <strong>筛选条件</strong>
-            </div>
-            <div className="filter-controls-grid">
-              <label className="filter-field">
-                <span>平台</span>
-                <select
-                  value={filters.source_platform}
-                  onChange={(event) =>
-                    setFilters((current) => ({
-                      ...current,
-                      source_platform: event.target.value as "" | SourcePlatform,
-                    }))
-                  }
-                >
-                  <option value="">全部平台</option>
-                  {sourcePlatforms.map((platform) => (
-                    <option key={platform.value} value={platform.value}>
-                      {platform.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="filter-field">
-                <span>标签</span>
-                <select
-                  value={filters.tag_id}
-                  onChange={(event) =>
-                    setFilters((current) => ({
-                      ...current,
-                      tag_id: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="">全部标签</option>
-                  {tags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="filter-actions">
-                <button type="submit">筛选</button>
-                <button
-                  className="filter-reset-button"
-                  type="button"
-                  onClick={clearFilters}
-                >
-                  清空
-                </button>
-              </div>
-            </div>
+            <p className="filter-result-text">{cards.length} 条灵感结果</p>
           </form>
 
           {isLoading ? (
