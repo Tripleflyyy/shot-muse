@@ -234,6 +234,10 @@ a {
   align-items: start;
 }
 
+.inspiration-layout {
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+}
+
 .form-panel,
 .list-panel,
 .entity-card,
@@ -334,6 +338,28 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+.filter-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 180px) minmax(130px, 160px) minmax(130px, 160px);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filter-panel input,
+.filter-panel select {
+  width: 100%;
+  border: 1px solid #d6d0c7;
+  border-radius: 8px;
+  padding: 10px 11px;
+  color: #2f2a25;
+  background: #ffffff;
+}
+
+.filter-actions {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
 .entity-list,
 .tag-group-list,
 .tag-list {
@@ -343,6 +369,18 @@ button:disabled {
 
 .entity-card {
   padding: 15px;
+}
+
+.inspiration-card {
+  display: grid;
+  gap: 12px;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .entity-card h2 {
@@ -385,6 +423,17 @@ button:disabled {
 .note-text {
   border-left: 3px solid #e4c37b;
   padding-left: 10px;
+}
+
+.platform-pill {
+  flex: 0 0 auto;
+  border: 1px solid #d6d0c7;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #5f574e;
+  background: #fff6df;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .row-actions {
@@ -461,4 +510,51 @@ button:disabled {
   flex: 0 0 auto;
   border: 1px solid #cfc7bb;
   border-radius: 50%;
+}
+
+.checkbox-grid {
+  display: grid;
+  max-height: 220px;
+  gap: 8px;
+  overflow: auto;
+  border: 1px solid #ebe3d6;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.check-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #2f2a25;
+  font-size: 14px;
+}
+
+.check-row input {
+  width: auto;
+}
+
+.check-row span {
+  color: #2f2a25;
+  font-weight: 500;
+}
+
+.tag-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2d8ca;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #3b342e;
+  background: #ffffff;
+  font-size: 13px;
 }

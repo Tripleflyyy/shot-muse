@@ -90,12 +90,12 @@ export async function listTagsByUsage(
   }));
 }
 
-type RawTag = Omit<Tag, "is_preset"> & {
+export type RawTag = Omit<Tag, "is_preset"> & {
   is_preset?: boolean | number | string;
   isPreset?: boolean | number | string;
 };
 
-function normalizeTag(tag: RawTag): Tag {
+export function normalizeTag(tag: RawTag): Tag {
   const isPresetValue = tag.is_preset ?? tag.isPreset ?? false;
   return {
     ...tag,
