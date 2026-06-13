@@ -140,7 +140,9 @@ export default function ProjectsPage() {
       theme: project.theme ?? "",
       description: project.description ?? "",
       location: project.location ?? "",
-      planned_shooting_time: project.planned_shooting_time ?? "",
+      planned_shooting_time: toDateTimeLocalValue(
+        project.planned_shooting_time,
+      ),
       notes: project.notes ?? "",
     });
     void loadProjectReferences(project.id, inspirationFilters);
@@ -331,6 +333,7 @@ export default function ProjectsPage() {
           <label className="field">
             <span>预计拍摄时间</span>
             <input
+              type="datetime-local"
               value={form.planned_shooting_time}
               onChange={(event) =>
                 setForm((current) => ({
@@ -338,7 +341,6 @@ export default function ProjectsPage() {
                   planned_shooting_time: event.target.value,
                 }))
               }
-              placeholder="例如：2026-06-20 16:00"
             />
           </label>
 
@@ -587,9 +589,27 @@ function toProjectPayload(form: ProjectFormState): ProjectPayload {
     theme: optionalText(form.theme),
     description: optionalText(form.description),
     location: optionalText(form.location),
-    planned_shooting_time: optionalText(form.planned_shooting_time),
+    planned_shooting_time: optionalText(
+      fromDateTimeLocalValue(form.planned_shooting_time),
+    ),
     notes: optionalText(form.notes),
   };
+}
+
+function toDateTimeLocalValue(value?: string | null): string {
+  if (!value) {
+    return "";
+  }
+
+  return value.replace(" ", "T").slice(0, 16);
+}
+
+function fromDateTimeLocalValue(value: string): string {
+  if (!value) {
+    return "";
+  }
+
+  return value.replace("T", " ");
 }
 
 function optionalText(value: string): string | null {
