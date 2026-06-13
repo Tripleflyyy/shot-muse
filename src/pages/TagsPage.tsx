@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 
 import {
   createCustomTag,
@@ -28,10 +28,23 @@ const tagCategories: Array<{ value: TagCategory; label: string }> = [
   { value: "custom", label: "自定义" },
 ];
 
+const tagColorOptions = [
+  { label: "琥珀", value: "#d9902f" },
+  { label: "珊瑚", value: "#e76f51" },
+  { label: "玫瑰", value: "#d95f8d" },
+  { label: "紫藤", value: "#8e7cc3" },
+  { label: "天空", value: "#5b8def" },
+  { label: "湖蓝", value: "#3aa6b9" },
+  { label: "薄荷", value: "#4caf50" },
+  { label: "青绿", value: "#2a9d8f" },
+  { label: "橄榄", value: "#8aa63f" },
+  { label: "石墨", value: "#666666" },
+];
+
 const emptyTagForm: TagFormState = {
   name: "",
   category: "custom",
-  color: "",
+  color: tagColorOptions[0].value,
 };
 
 export default function TagsPage() {
@@ -122,8 +135,8 @@ export default function TagsPage() {
     }
 
     const color = form.color.trim();
-    if (color && !isValidHexColor(color)) {
-      alert("颜色格式错误：标签颜色格式必须为 #RRGGBB");
+    if (!tagColorOptions.some((option) => option.value === color)) {
+      alert("请选择有效的标签颜色");
       return;
     }
 
@@ -158,8 +171,14 @@ export default function TagsPage() {
     setForm({
       name: tag.name,
       category: tag.category,
-      color: tag.color ?? "",
+      color: isKnownTagColor(tag.color) ? tag.color : tagColorOptions[0].value,
     });
+  }
+
+  function requestDeleteFromChip(event: MouseEvent<HTMLElement>, tag: Tag) {
+    event.stopPropagation();
+    handleEdit(tag);
+    requestDeleteTag(tag);
   }
 
   function requestDeleteTag(tag: Tag) {
@@ -280,7 +299,7 @@ export default function TagsPage() {
 
           <label className="field">
             <span>颜色</span>
-            <input
+            <select
               disabled={isEditingPreset}
               value={form.color}
               onChange={(event) =>
@@ -289,9 +308,25 @@ export default function TagsPage() {
                   color: event.target.value,
                 }))
               }
-              placeholder="#FFAA00"
-            />
+            >
+              {tagColorOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} {option.value}
+                </option>
+              ))}
+            </select>
           </label>
+
+          <div className="tag-color-preview">
+            <span
+              className="tag-dot"
+              style={{ backgroundColor: form.color || "#d6d0c7" }}
+            />
+            <span>
+              {tagColorOptions.find((option) => option.value === form.color)
+                ?.label ?? "自定义颜色"}
+            </span>
+          </div>
 
           <button
             className="primary-button"
@@ -405,7 +440,7 @@ export default function TagsPage() {
                             : "tag-manage-chip"
                         }
                         key={tag.id}
-                        style={{ borderColor: tag.color ?? "#d6d0c7" }}
+                        style={tagChipStyle(tag)}
                         type="button"
                         onClick={() => handleEdit(tag)}
                       >
@@ -414,7 +449,25 @@ export default function TagsPage() {
                           style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
                         />
                         <span>#{tag.name}</span>
-                        <small>{isPresetTag(tag) ? "预设" : "自定义"}</small>
+                        {!isPresetTag(tag) && (
+                          <span
+                            aria-label={`删除标签 ${tag.name}`}
+                            className="tag-chip-remove"
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => requestDeleteFromChip(event, tag)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleEdit(tag);
+                                requestDeleteTag(tag);
+                              }
+                            }}
+                          >
+                            ×
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -433,14 +486,33 @@ function isPresetTag(tag: Tag | null): boolean {
   return value === true || value === 1 || value === "1";
 }
 
-function isValidHexColor(color: string): boolean {
-  return /^#[0-9A-Fa-f]{6}$/.test(color);
-}
-
 function categoryLabel(category: TagCategory): string {
   return (
     tagCategories.find((item) => item.value === category)?.label ?? category
   );
+}
+
+function isKnownTagColor(color: string | null | undefined): color is string {
+  return Boolean(color && tagColorOptions.some((option) => option.value === color));
+}
+
+function tagChipStyle(tag: Tag): CSSProperties {
+  const color = isValidHexColor(tag.color) ? tag.color : "#8a6f3d";
+  return {
+    "--tag-color": color,
+    "--tag-bg": softTagBackground(color),
+  } as CSSProperties;
+}
+
+function isValidHexColor(color: string | null | undefined): color is string {
+  return Boolean(color && /^#[0-9A-Fa-f]{6}$/.test(color));
+}
+
+function softTagBackground(color: string): string {
+  const red = parseInt(color.slice(1, 3), 16);
+  const green = parseInt(color.slice(3, 5), 16);
+  const blue = parseInt(color.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, 0.12)`;
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {

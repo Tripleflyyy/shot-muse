@@ -151,6 +151,65 @@ pub fn detach_tag_from_inspiration(
         .map_err(command_error)
 }
 
+#[tauri::command]
+pub fn attach_inspiration_to_project(
+    state: State<'_, AppState>,
+    project_id: String,
+    inspiration_card_id: String,
+) -> Result<bool, String> {
+    validate_id(&project_id, "项目 ID 不能为空")?;
+    validate_id(&inspiration_card_id, "灵感卡片 ID 不能为空")?;
+
+    state
+        .with_connection(|connection| {
+            ensure_project_exists(connection, &project_id)?;
+            ensure_inspiration_exists(connection, &inspiration_card_id)?;
+            inspiration_repository::attach_inspiration_to_project(
+                connection,
+                &project_id,
+                &inspiration_card_id,
+            )
+        })
+        .map_err(command_error)
+}
+
+#[tauri::command]
+pub fn detach_inspiration_from_project(
+    state: State<'_, AppState>,
+    project_id: String,
+    inspiration_card_id: String,
+) -> Result<bool, String> {
+    validate_id(&project_id, "项目 ID 不能为空")?;
+    validate_id(&inspiration_card_id, "灵感卡片 ID 不能为空")?;
+
+    state
+        .with_connection(|connection| {
+            ensure_project_exists(connection, &project_id)?;
+            ensure_inspiration_exists(connection, &inspiration_card_id)?;
+            inspiration_repository::detach_inspiration_from_project(
+                connection,
+                &project_id,
+                &inspiration_card_id,
+            )
+        })
+        .map_err(command_error)
+}
+
+#[tauri::command]
+pub fn list_project_inspirations(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<Vec<InspirationCard>, String> {
+    validate_id(&project_id, "项目 ID 不能为空")?;
+
+    state
+        .with_connection(|connection| {
+            ensure_project_exists(connection, &project_id)?;
+            inspiration_repository::list_project_inspirations(connection, &project_id)
+        })
+        .map_err(command_error)
+}
+
 fn validate_payload_shape(payload: &InspirationCardPayload) -> Result<(), String> {
     if payload.title.trim().is_empty() {
         return Err("灵感标题不能为空".to_string());
@@ -215,6 +274,14 @@ fn ensure_tag_exists(connection: &rusqlite::Connection, id: &str) -> rusqlite::R
         Ok(())
     } else {
         Err(validation_error("标签不存在"))
+    }
+}
+
+fn ensure_project_exists(connection: &rusqlite::Connection, id: &str) -> rusqlite::Result<()> {
+    if inspiration_repository::project_exists(connection, id)? {
+        Ok(())
+    } else {
+        Err(validation_error("关联项目不存在"))
     }
 }
 

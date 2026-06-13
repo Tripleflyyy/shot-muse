@@ -5,8 +5,9 @@ pub mod tag_commands;
 
 pub use app_commands::{get_app_status, health_check};
 pub use inspiration_commands::{
-    attach_tag_to_inspiration, create_inspiration_card, delete_inspiration_card,
-    detach_tag_from_inspiration, get_inspiration_card, list_inspiration_cards,
+    attach_inspiration_to_project, attach_tag_to_inspiration, create_inspiration_card,
+    delete_inspiration_card, detach_inspiration_from_project, detach_tag_from_inspiration,
+    get_inspiration_card, list_inspiration_cards, list_project_inspirations,
     update_inspiration_card,
 };
 pub use project_commands::{

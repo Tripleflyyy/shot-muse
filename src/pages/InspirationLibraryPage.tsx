@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   createInspirationCard,
@@ -9,8 +9,7 @@ import {
   SourcePlatform,
   updateInspirationCard,
 } from "../services/inspirationApi";
-import { listProjects, Project } from "../services/projectApi";
-import { listTags, Tag } from "../services/tagApi";
+import { listTags, Tag, TagCategory } from "../services/tagApi";
 
 type InspirationFormState = {
   title: string;
@@ -18,12 +17,10 @@ type InspirationFormState = {
   source_url: string;
   author_name: string;
   notes: string;
-  project_id: string;
   tag_ids: string[];
 };
 
 type InspirationFiltersState = {
-  project_id: string;
   source_platform: "" | SourcePlatform;
   keyword: string;
   tag_id: string;
@@ -44,23 +41,31 @@ const emptyForm: InspirationFormState = {
   source_url: "",
   author_name: "",
   notes: "",
-  project_id: "",
   tag_ids: [],
 };
 
 const emptyFilters: InspirationFiltersState = {
-  project_id: "",
   source_platform: "",
   keyword: "",
   tag_id: "",
 };
 
+const tagCategories: Array<{ value: TagCategory; label: string }> = [
+  { value: "subject", label: "主体" },
+  { value: "lighting", label: "光线" },
+  { value: "composition", label: "构图" },
+  { value: "color", label: "色彩" },
+  { value: "mood", label: "情绪" },
+  { value: "technique", label: "技术" },
+  { value: "custom", label: "自定义" },
+];
+
 export default function InspirationLibraryPage() {
   const [cards, setCards] = useState<InspirationCard[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [form, setForm] = useState<InspirationFormState>(emptyForm);
   const [filters, setFilters] = useState<InspirationFiltersState>(emptyFilters);
+  const [tagSearchKeyword, setTagSearchKeyword] = useState("");
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [pendingDeleteCard, setPendingDeleteCard] =
     useState<InspirationCard | null>(null);
@@ -68,22 +73,25 @@ export default function InspirationLibraryPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditing = editingCardId !== null;
+  const selectableTags = useMemo(() => {
+    const keyword = tagSearchKeyword.trim().toLowerCase();
+    if (!keyword) {
+      return tags;
+    }
 
-  const projectNameById = useMemo(
-    () => new Map(projects.map((project) => [project.id, project.name])),
-    [projects],
-  );
+    return tags.filter((tag) =>
+      [tag.name, tag.category, categoryLabel(tag.category)]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword),
+    );
+  }, [tagSearchKeyword, tags]);
 
   async function loadReferenceData() {
     try {
-      const [projectData, tagData] = await Promise.all([
-        listProjects(),
-        listTags(),
-      ]);
-      setProjects(projectData);
-      setTags(tagData);
+      setTags(await listTags());
     } catch (error) {
-      alert(toErrorMessage(error, "加载项目或标签失败"));
+      alert(toErrorMessage(error, "加载标签失败"));
     }
   }
 
@@ -91,7 +99,6 @@ export default function InspirationLibraryPage() {
     setIsLoading(true);
     try {
       const data = await listInspirationCards({
-        project_id: optionalText(nextFilters.project_id),
         source_platform: nextFilters.source_platform || null,
         keyword: optionalText(nextFilters.keyword),
         tag_ids: nextFilters.tag_id ? [nextFilters.tag_id] : [],
@@ -156,7 +163,6 @@ export default function InspirationLibraryPage() {
       source_url: card.source_url ?? "",
       author_name: card.author_name ?? "",
       notes: card.notes ?? "",
-      project_id: card.project_id ?? "",
       tag_ids: card.tags.map((tag) => tag.id),
     });
   }
@@ -294,26 +300,6 @@ export default function InspirationLibraryPage() {
           </label>
 
           <label className="field">
-            <span>所属项目</span>
-            <select
-              value={form.project_id}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  project_id: event.target.value,
-                }))
-              }
-            >
-              <option value="">不关联项目</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
             <span>备注</span>
             <textarea
               value={form.notes}
@@ -326,21 +312,37 @@ export default function InspirationLibraryPage() {
 
           <div className="field">
             <span>标签</span>
-            <div className="checkbox-grid">
-              {tags.length === 0 ? (
+            <div className="tag-picker-panel">
+              <input
+                value={tagSearchKeyword}
+                onChange={(event) => setTagSearchKeyword(event.target.value)}
+                placeholder="搜索标签名或分类"
+              />
+              <div className="tag-chip-cloud">
+                {selectableTags.length === 0 ? (
                 <p className="empty-message">暂无标签</p>
               ) : (
-                tags.map((tag) => (
-                  <label className="check-row" key={tag.id}>
-                    <input
-                      checked={form.tag_ids.includes(tag.id)}
-                      type="checkbox"
-                      onChange={() => toggleFormTag(tag.id)}
+                selectableTags.map((tag) => (
+                  <button
+                    className={
+                      form.tag_ids.includes(tag.id)
+                        ? "tag-manage-chip tag-manage-chip--selected"
+                        : "tag-manage-chip"
+                    }
+                    key={tag.id}
+                    style={tagChipStyle(tag)}
+                    type="button"
+                    onClick={() => toggleFormTag(tag.id)}
+                  >
+                    <span
+                      className="tag-chip-color"
+                      style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
                     />
-                    <span>{tag.name}</span>
-                  </label>
+                    <span>#{tag.name}</span>
+                  </button>
                 ))
               )}
+              </div>
             </div>
           </div>
 
@@ -366,26 +368,6 @@ export default function InspirationLibraryPage() {
             </div>
 
             <div className="filter-controls-grid">
-              <label className="filter-field">
-                <span>项目</span>
-                <select
-                  value={filters.project_id}
-                  onChange={(event) =>
-                    setFilters((current) => ({
-                      ...current,
-                      project_id: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="">全部项目</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
               <label className="filter-field">
                 <span>平台</span>
                 <select
@@ -458,15 +440,6 @@ export default function InspirationLibraryPage() {
 
                   <dl className="compact-meta">
                     <div>
-                      <dt>所属项目</dt>
-                      <dd>
-                        {card.project_name ||
-                          (card.project_id
-                            ? projectNameById.get(card.project_id) || card.project_id
-                            : "-")}
-                      </dd>
-                    </div>
-                    <div>
                       <dt>收藏时间</dt>
                       <dd>{formatDateTime(card.collected_at)}</dd>
                     </div>
@@ -489,7 +462,11 @@ export default function InspirationLibraryPage() {
                       <span className="muted-text">未添加标签</span>
                     ) : (
                       card.tags.map((tag) => (
-                        <span className="tag-chip" key={tag.id}>
+                        <span
+                          className="tag-chip"
+                          key={tag.id}
+                          style={tagChipStyle(tag)}
+                        >
                           <span
                             className="tag-dot"
                             style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
@@ -552,7 +529,7 @@ function toPayload(form: InspirationFormState): InspirationCardPayload {
     source_url: optionalText(form.source_url),
     author_name: optionalText(form.author_name),
     notes: optionalText(form.notes),
-    project_id: optionalText(form.project_id),
+    project_id: null,
     tag_ids: form.tag_ids,
   };
 }
@@ -566,6 +543,31 @@ function platformLabel(platform: SourcePlatform): string {
   return (
     sourcePlatforms.find((item) => item.value === platform)?.label ?? "其他"
   );
+}
+
+function categoryLabel(category: TagCategory): string {
+  return (
+    tagCategories.find((item) => item.value === category)?.label ?? category
+  );
+}
+
+function tagChipStyle(tag: Tag): CSSProperties {
+  const color = isValidHexColor(tag.color) ? tag.color : "#8a6f3d";
+  return {
+    "--tag-color": color,
+    "--tag-bg": softTagBackground(color),
+  } as CSSProperties;
+}
+
+function isValidHexColor(color: string | null | undefined): color is string {
+  return Boolean(color && /^#[0-9A-Fa-f]{6}$/.test(color));
+}
+
+function softTagBackground(color: string): string {
+  const red = parseInt(color.slice(1, 3), 16);
+  const green = parseInt(color.slice(3, 5), 16);
+  const blue = parseInt(color.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, 0.12)`;
 }
 
 function formatDateTime(value: string): string {

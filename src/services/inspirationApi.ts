@@ -115,6 +115,35 @@ export async function detachTagFromInspiration(
   });
 }
 
+export async function attachInspirationToProject(
+  projectId: string,
+  inspirationCardId: string,
+): Promise<boolean> {
+  return invoke<boolean>("attach_inspiration_to_project", {
+    projectId,
+    inspirationCardId,
+  });
+}
+
+export async function detachInspirationFromProject(
+  projectId: string,
+  inspirationCardId: string,
+): Promise<boolean> {
+  return invoke<boolean>("detach_inspiration_from_project", {
+    projectId,
+    inspirationCardId,
+  });
+}
+
+export async function listProjectInspirations(
+  projectId: string,
+): Promise<InspirationCard[]> {
+  const cards = await invoke<RawInspirationCard[]>("list_project_inspirations", {
+    projectId,
+  });
+  return cards.map(normalizeInspirationCard);
+}
+
 function normalizeInspirationCard(card: RawInspirationCard): InspirationCard {
   return {
     ...card,

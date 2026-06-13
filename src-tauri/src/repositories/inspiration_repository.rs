@@ -256,6 +256,76 @@ pub fn detach_tag_from_inspiration(
     Ok(changed > 0)
 }
 
+pub fn attach_inspiration_to_project(
+    connection: &Connection,
+    project_id: &str,
+    inspiration_card_id: &str,
+) -> rusqlite::Result<bool> {
+    let changed = connection.execute(
+        "
+        INSERT OR IGNORE INTO project_inspirations (
+          project_id,
+          inspiration_card_id,
+          created_at
+        )
+        VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        ",
+        params![project_id, inspiration_card_id],
+    )?;
+    Ok(changed > 0)
+}
+
+pub fn detach_inspiration_from_project(
+    connection: &Connection,
+    project_id: &str,
+    inspiration_card_id: &str,
+) -> rusqlite::Result<bool> {
+    let changed = connection.execute(
+        "
+        DELETE FROM project_inspirations
+        WHERE project_id = ?1 AND inspiration_card_id = ?2
+        ",
+        params![project_id, inspiration_card_id],
+    )?;
+    Ok(changed > 0)
+}
+
+pub fn list_project_inspirations(
+    connection: &Connection,
+    project_id: &str,
+) -> rusqlite::Result<Vec<InspirationCard>> {
+    let mut statement = connection.prepare(
+        "
+        SELECT
+          inspiration_cards.id,
+          inspiration_cards.title,
+          inspiration_cards.source_platform,
+          inspiration_cards.source_url,
+          inspiration_cards.author_name,
+          inspiration_cards.notes,
+          inspiration_cards.project_id,
+          projects.name AS project_name,
+          inspiration_cards.collected_at,
+          inspiration_cards.created_at,
+          inspiration_cards.updated_at
+        FROM inspiration_cards
+        INNER JOIN project_inspirations
+          ON project_inspirations.inspiration_card_id = inspiration_cards.id
+        LEFT JOIN projects ON projects.id = inspiration_cards.project_id
+        WHERE project_inspirations.project_id = ?1
+        ORDER BY project_inspirations.created_at DESC
+        ",
+    )?;
+
+    let rows = statement
+        .query_map([project_id], map_inspiration_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    rows.into_iter()
+        .map(|row| hydrate_inspiration_card(connection, row))
+        .collect()
+}
+
 pub fn inspiration_exists(connection: &Connection, id: &str) -> rusqlite::Result<bool> {
     connection.query_row(
         "SELECT EXISTS(SELECT 1 FROM inspiration_cards WHERE id = ?1)",
@@ -506,6 +576,74 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("count relations");
+        assert_eq!(relation_count, 0);
+    }
+
+    #[test]
+    fn attach_detach_and_cascade_project_inspirations() {
+        let connection = test_connection();
+        let project_id = create_project(&connection);
+        let tag_id = create_tag(&connection, "项目参考标签");
+        let card = create_inspiration_card(
+            &connection,
+            &InspirationCardPayload {
+                title: "项目参考灵感".into(),
+                source_platform: "xiaohongshu".into(),
+                source_url: None,
+                author_name: None,
+                notes: None,
+                project_id: None,
+                collected_at: None,
+                tag_ids: Some(vec![tag_id]),
+            },
+        )
+        .expect("create inspiration");
+
+        assert!(
+            attach_inspiration_to_project(&connection, &project_id, &card.id)
+                .expect("attach inspiration to project")
+        );
+        assert!(
+            !attach_inspiration_to_project(&connection, &project_id, &card.id)
+                .expect("attach duplicate inspiration to project")
+        );
+
+        let linked =
+            list_project_inspirations(&connection, &project_id).expect("list project inspirations");
+        assert_eq!(linked.len(), 1);
+        assert_eq!(linked[0].id, card.id);
+
+        assert!(
+            detach_inspiration_from_project(&connection, &project_id, &card.id)
+                .expect("detach inspiration from project")
+        );
+        assert!(list_project_inspirations(&connection, &project_id)
+            .expect("list after detach")
+            .is_empty());
+
+        assert!(
+            attach_inspiration_to_project(&connection, &project_id, &card.id)
+                .expect("attach again")
+        );
+        project_repository::delete_project(&connection, &project_id).expect("delete project");
+        let relation_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM project_inspirations", [], |row| {
+                row.get(0)
+            })
+            .expect("count relations after project delete");
+        assert_eq!(relation_count, 0);
+
+        let project_id = create_project(&connection);
+        assert!(
+            attach_inspiration_to_project(&connection, &project_id, &card.id)
+                .expect("attach before card delete")
+        );
+        assert!(delete_inspiration_card(&connection, &card.id).expect("delete inspiration"));
+        let relation_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM project_inspirations", [], |row| {
+                row.get(0)
+            })
+            .expect("count relations after card delete");
         assert_eq!(relation_count, 0);
     }
 
