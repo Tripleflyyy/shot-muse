@@ -119,7 +119,12 @@ pub fn delete_tag(state: State<'_, AppState>, id: String) -> Result<bool, String
                 ));
             }
 
-            tag_repository::delete_tag(connection, &id)
+            let deleted = tag_repository::delete_tag(connection, &id)?;
+            if deleted {
+                Ok(true)
+            } else {
+                Err(rusqlite::Error::QueryReturnedNoRows)
+            }
         })
         .map_err(command_error)
 }

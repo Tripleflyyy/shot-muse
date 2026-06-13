@@ -20,7 +20,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -157,6 +159,20 @@ a {
   line-height: 1.6;
 }
 
+.inline-confirm {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #f0b4b4;
+  border-radius: 8px;
+  background: #fff5f5;
+}
+
+.inline-confirm p {
+  margin: 0 0 8px;
+  color: #6d2525;
+  font-weight: 700;
+}
+
 .placeholder-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -209,4 +225,240 @@ a {
 
 .status-list__path {
   overflow-wrap: anywhere;
+}
+
+.crud-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.form-panel,
+.list-panel,
+.entity-card,
+.tag-group {
+  border: 1px solid #ded8ce;
+  border-radius: 8px;
+  background: #fffaf3;
+}
+
+.form-panel,
+.list-panel {
+  padding: 18px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  color: #1f1c18;
+  font-size: 17px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 13px;
+}
+
+.field span {
+  color: #5f574e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.field textarea,
+.toolbar input {
+  width: 100%;
+  border: 1px solid #d6d0c7;
+  border-radius: 8px;
+  padding: 10px 11px;
+  color: #2f2a25;
+  background: #ffffff;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.primary-button,
+.toolbar button,
+.row-actions button,
+.section-heading button,
+.text-button {
+  border: 1px solid #cfc7bb;
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #2f2a25;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.primary-button {
+  width: 100%;
+  border-color: #c8973f;
+  color: #1f1c18;
+  background: #f0c36a;
+  font-weight: 700;
+}
+
+.text-button {
+  padding: 6px 8px;
+  color: #795111;
+  background: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.danger-button {
+  border-color: #d7a5a5 !important;
+  color: #9f1d1d !important;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.entity-list,
+.tag-group-list,
+.tag-list {
+  display: grid;
+  gap: 12px;
+}
+
+.entity-card {
+  padding: 15px;
+}
+
+.entity-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.entity-card p,
+.muted-text,
+.empty-message,
+.note-text {
+  color: #6b635a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.entity-card p {
+  margin: 5px 0 0;
+}
+
+.compact-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+}
+
+.compact-meta dt {
+  color: #7a7066;
+  font-size: 12px;
+}
+
+.compact-meta dd {
+  margin: 3px 0 0;
+  color: #2f2a25;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.note-text {
+  border-left: 3px solid #e4c37b;
+  padding-left: 10px;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.row-actions button {
+  pointer-events: auto;
+}
+
+.tag-group {
+  padding: 14px;
+}
+
+.tag-group h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.tag-group h3 span {
+  color: #7a7066;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #ebe3d6;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.tag-row .inline-confirm {
+  flex: 1 0 100%;
+  width: 100%;
+}
+
+.tag-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.tag-main strong {
+  display: block;
+  color: #2f2a25;
+}
+
+.tag-main p {
+  margin: 3px 0 0;
+  color: #746b61;
+  font-size: 12px;
+}
+
+.tag-dot {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border: 1px solid #cfc7bb;
+  border-radius: 50%;
 }
