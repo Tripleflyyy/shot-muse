@@ -16,8 +16,10 @@ type TagFormState = {
   color: string;
 };
 
+type TagTypeFilter = "all" | "preset" | "custom";
+
 const tagCategories: Array<{ value: TagCategory; label: string }> = [
-  { value: "subject", label: "题材" },
+  { value: "subject", label: "主体" },
   { value: "lighting", label: "光线" },
   { value: "composition", label: "构图" },
   { value: "color", label: "色彩" },
@@ -36,6 +38,11 @@ export default function TagsPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [form, setForm] = useState<TagFormState>(emptyTagForm);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | TagCategory>(
+    "all",
+  );
+  const [typeFilter, setTypeFilter] = useState<TagTypeFilter>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDeleteTag, setPendingDeleteTag] = useState<Tag | null>(null);
@@ -46,6 +53,44 @@ export default function TagsPage() {
   );
 
   const isEditingPreset = isPresetTag(editingTag);
+
+  const filteredGroups = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase();
+    const filteredTags = tags.filter((tag) => {
+      if (categoryFilter !== "all" && tag.category !== categoryFilter) {
+        return false;
+      }
+
+      const isPreset = isPresetTag(tag);
+      if (typeFilter === "preset" && !isPreset) {
+        return false;
+      }
+      if (typeFilter === "custom" && isPreset) {
+        return false;
+      }
+
+      if (!keyword) {
+        return true;
+      }
+
+      return [tag.name, tag.category, categoryLabel(tag.category)]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword);
+    });
+
+    return tagCategories
+      .map((category) => ({
+        ...category,
+        tags: filteredTags.filter((tag) => tag.category === category.value),
+      }))
+      .filter((group) => group.tags.length > 0);
+  }, [categoryFilter, searchKeyword, tags, typeFilter]);
+
+  const filteredTagCount = filteredGroups.reduce(
+    (total, group) => total + group.tags.length,
+    0,
+  );
 
   async function loadTags() {
     setIsLoading(true);
@@ -68,6 +113,11 @@ export default function TagsPage() {
 
     if (!form.name.trim()) {
       alert("标签名称不能为空");
+      return;
+    }
+
+    if (isEditingPreset) {
+      alert("预设标签不可编辑");
       return;
     }
 
@@ -104,6 +154,7 @@ export default function TagsPage() {
 
   function handleEdit(tag: Tag) {
     setEditingTagId(tag.id);
+    setPendingDeleteTag(null);
     setForm({
       name: tag.name,
       category: tag.category,
@@ -154,6 +205,7 @@ export default function TagsPage() {
 
   function resetForm() {
     setEditingTagId(null);
+    setPendingDeleteTag(null);
     setForm(emptyTagForm);
   }
 
@@ -168,19 +220,36 @@ export default function TagsPage() {
       </header>
 
       <div className="crud-layout">
-        <form className="form-panel" onSubmit={handleSubmit}>
+        <form className="form-panel sticky-form-panel" onSubmit={handleSubmit}>
           <div className="section-heading">
-            <h2>{editingTagId ? "编辑标签" : "新建自定义标签"}</h2>
+            <h2>{editingTagId ? "标签详情" : "新建自定义标签"}</h2>
             {editingTagId && (
               <button className="text-button" type="button" onClick={resetForm}>
-                取消编辑
+                新建标签
               </button>
             )}
           </div>
 
+          {editingTag && (
+            <div className="selected-tag-summary">
+              <span
+                className="tag-dot"
+                style={{ backgroundColor: editingTag.color ?? "#d6d0c7" }}
+              />
+              <div>
+                <strong>#{editingTag.name}</strong>
+                <p>
+                  {categoryLabel(editingTag.category)} ·{" "}
+                  {isEditingPreset ? "预设标签" : "自定义标签"}
+                </p>
+              </div>
+            </div>
+          )}
+
           <label className="field">
             <span>标签名称 *</span>
             <input
+              disabled={isEditingPreset}
               value={form.name}
               onChange={(event) =>
                 setForm((current) => ({ ...current, name: event.target.value }))
@@ -212,6 +281,7 @@ export default function TagsPage() {
           <label className="field">
             <span>颜色</span>
             <input
+              disabled={isEditingPreset}
               value={form.color}
               onChange={(event) =>
                 setForm((current) => ({
@@ -223,99 +293,132 @@ export default function TagsPage() {
             />
           </label>
 
-          <button className="primary-button" disabled={isSaving} type="submit">
+          <button
+            className="primary-button"
+            disabled={isSaving || isEditingPreset}
+            type="submit"
+          >
             {isSaving ? "保存中..." : editingTagId ? "保存修改" : "创建标签"}
           </button>
+
+          {editingTag && (
+            <div className="form-secondary-actions">
+              <button
+                className="danger-button"
+                disabled={isEditingPreset}
+                title={isEditingPreset ? "预设标签不可删除" : undefined}
+                type="button"
+                onClick={() => requestDeleteTag(editingTag)}
+              >
+                删除标签
+              </button>
+            </div>
+          )}
+
+          {pendingDeleteTag && (
+            <div className="inline-confirm">
+              <p>确定删除标签「{pendingDeleteTag.name}」吗？</p>
+              <div className="row-actions">
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => void confirmDeleteTag()}
+                >
+                  确认删除
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingDeleteTag(null);
+                  }}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
         </form>
 
         <section className="list-panel">
           <div className="section-heading">
-            <h2>全部标签</h2>
+            <h2>标签库</h2>
             <button type="button" onClick={() => void loadTags()}>
               刷新
             </button>
+          </div>
+
+          <div className="tag-filter-panel">
+            <input
+              value={searchKeyword}
+              onChange={(event) => setSearchKeyword(event.target.value)}
+              placeholder="搜索标签名或分类"
+            />
+            <select
+              value={categoryFilter}
+              onChange={(event) =>
+                setCategoryFilter(event.target.value as "all" | TagCategory)
+              }
+            >
+              <option value="all">全部分类</option>
+              {tagCategories.map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={typeFilter}
+              onChange={(event) =>
+                setTypeFilter(event.target.value as TagTypeFilter)
+              }
+            >
+              <option value="all">全部类型</option>
+              <option value="preset">预设</option>
+              <option value="custom">自定义</option>
+            </select>
           </div>
 
           {isLoading ? (
             <p className="muted-text">正在加载标签...</p>
           ) : tags.length === 0 ? (
             <p className="empty-message">暂无标签</p>
+          ) : filteredTagCount === 0 ? (
+            <p className="empty-message">没有匹配的标签</p>
           ) : (
-            <div className="tag-table">
-              <div className="tag-table-header">
-                <span>标签</span>
-                <span>分类</span>
-                <span>类型</span>
-                <span>操作</span>
-              </div>
-
-              {tags.map((tag) => (
-                <article className="tag-table-row" key={tag.id}>
-                  <div className="tag-cell tag-name-cell">
-                    <span
-                      className="tag-dot"
-                      style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
-                    />
-                    <strong>{tag.name}</strong>
-                  </div>
-                  <div className="tag-cell">
-                    <span className="tag-category-pill">
-                      {categoryLabel(tag.category)}
-                    </span>
-                  </div>
-                  <div className="tag-cell">
-                    <span
-                      className={
-                        isPresetTag(tag)
-                          ? "tag-type-pill tag-type-pill--preset"
-                          : "tag-type-pill"
-                      }
-                    >
-                      {isPresetTag(tag) ? "预设" : "自定义"}
-                    </span>
-                  </div>
-                  <div className="tag-table-actions">
-                    <button
-                      disabled={isPresetTag(tag)}
-                      title={isPresetTag(tag) ? "预设标签不可编辑" : undefined}
-                      type="button"
-                      onClick={() => handleEdit(tag)}
-                    >
-                      编辑
-                    </button>
-                    <button
-                      className="danger-button"
-                      disabled={isPresetTag(tag)}
-                      title={isPresetTag(tag) ? "预设标签不可删除" : undefined}
-                      type="button"
-                      onClick={() => requestDeleteTag(tag)}
-                    >
-                      删除
-                    </button>
-                  </div>
-                  {pendingDeleteTag?.id === tag.id && (
-                    <div className="inline-confirm tag-row-confirm">
-                      <p>确定删除标签「{tag.name}」吗？</p>
-                      <div className="row-actions">
-                        <button
-                          className="danger-button"
-                          type="button"
-                          onClick={() => void confirmDeleteTag()}
-                        >
-                          确认删除
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingDeleteTag(null);
-                          }}
-                        >
-                          取消
-                        </button>
-                      </div>
+            <div className="tag-chip-board">
+              {filteredGroups.map((group) => (
+                <section className="tag-chip-group" key={group.value}>
+                  <div className="tag-group-header">
+                    <div>
+                      <h3>{group.label}</h3>
+                      <p>{group.value}</p>
                     </div>
-                  )}
-                </article>
+                    <span>{group.tags.length}</span>
+                  </div>
+
+                  <div className="tag-chip-cloud">
+                    {group.tags.map((tag) => (
+                      <button
+                        className={
+                          editingTagId === tag.id
+                            ? "tag-manage-chip tag-manage-chip--selected"
+                            : "tag-manage-chip"
+                        }
+                        key={tag.id}
+                        style={{ borderColor: tag.color ?? "#d6d0c7" }}
+                        type="button"
+                        onClick={() => handleEdit(tag)}
+                      >
+                        <span
+                          className="tag-chip-color"
+                          style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
+                        />
+                        <span>#{tag.name}</span>
+                        <small>{isPresetTag(tag) ? "预设" : "自定义"}</small>
+                      </button>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           )}

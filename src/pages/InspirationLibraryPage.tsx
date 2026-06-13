@@ -226,7 +226,7 @@ export default function InspirationLibraryPage() {
       </header>
 
       <div className="crud-layout inspiration-layout">
-        <form className="form-panel" onSubmit={handleSubmit}>
+        <form className="form-panel sticky-form-panel" onSubmit={handleSubmit}>
           <div className="section-heading">
             <h2>{isEditing ? "编辑灵感卡片" : "新建灵感卡片"}</h2>
             {isEditing && (
@@ -350,75 +350,88 @@ export default function InspirationLibraryPage() {
         </form>
 
         <section className="list-panel">
-          <form className="filter-panel filter-toolbar" onSubmit={handleFilterSubmit}>
-            <input
-              className="filter-search"
-              value={filters.keyword}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  keyword: event.target.value,
-                }))
-              }
-              placeholder="搜索标题、作者、备注或链接"
-            />
+          <form className="filter-panel" onSubmit={handleFilterSubmit}>
+            <div className="filter-search-row">
+              <input
+                className="filter-search"
+                value={filters.keyword}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    keyword: event.target.value,
+                  }))
+                }
+                placeholder="搜索灵感标题 / 作者 / 备注 / 链接"
+              />
+            </div>
 
-            <select
-              value={filters.project_id}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  project_id: event.target.value,
-                }))
-              }
-            >
-              <option value="">全部项目</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+            <div className="filter-controls-grid">
+              <label className="filter-field">
+                <span>项目</span>
+                <select
+                  value={filters.project_id}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      project_id: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">全部项目</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <select
-              value={filters.source_platform}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  source_platform: event.target.value as "" | SourcePlatform,
-                }))
-              }
-            >
-              <option value="">全部平台</option>
-              {sourcePlatforms.map((platform) => (
-                <option key={platform.value} value={platform.value}>
-                  {platform.label}
-                </option>
-              ))}
-            </select>
+              <label className="filter-field">
+                <span>平台</span>
+                <select
+                  value={filters.source_platform}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      source_platform: event.target.value as "" | SourcePlatform,
+                    }))
+                  }
+                >
+                  <option value="">全部平台</option>
+                  {sourcePlatforms.map((platform) => (
+                    <option key={platform.value} value={platform.value}>
+                      {platform.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <select
-              value={filters.tag_id}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  tag_id: event.target.value,
-                }))
-              }
-            >
-              <option value="">全部标签</option>
-              {tags.map((tag) => (
-                <option key={tag.id} value={tag.id}>
-                  {tag.name}
-                </option>
-              ))}
-            </select>
+              <label className="filter-field">
+                <span>标签</span>
+                <select
+                  value={filters.tag_id}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      tag_id: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">全部标签</option>
+                  {tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <div className="filter-actions">
-              <button type="submit">筛选</button>
-              <button type="button" onClick={clearFilters}>
-                清空
-              </button>
+              <div className="filter-actions">
+                <button type="submit">筛选</button>
+                <button type="button" onClick={clearFilters}>
+                  清空
+                </button>
+              </div>
             </div>
           </form>
 
