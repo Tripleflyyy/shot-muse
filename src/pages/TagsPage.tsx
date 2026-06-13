@@ -157,15 +157,6 @@ export default function TagsPage() {
     setForm(emptyTagForm);
   }
 
-  const groupedTags = useMemo(
-    () =>
-      tagCategories.map((category) => ({
-        ...category,
-        tags: tags.filter((tag) => tag.category === category.value),
-      })),
-    [tags],
-  );
-
   return (
     <section className="page-frame">
       <header className="page-header">
@@ -247,80 +238,84 @@ export default function TagsPage() {
 
           {isLoading ? (
             <p className="muted-text">正在加载标签...</p>
+          ) : tags.length === 0 ? (
+            <p className="empty-message">暂无标签</p>
           ) : (
-            <div className="tag-group-list">
-              {groupedTags.map((group) => (
-                <section className="tag-group" key={group.value}>
-                  <h3>
-                    {group.label}
-                    <span>{group.value}</span>
-                  </h3>
+            <div className="tag-table">
+              <div className="tag-table-header">
+                <span>标签</span>
+                <span>分类</span>
+                <span>类型</span>
+                <span>操作</span>
+              </div>
 
-                  {group.tags.length === 0 ? (
-                    <p className="empty-message">暂无标签</p>
-                  ) : (
-                    <div className="tag-list">
-                      {group.tags.map((tag) => (
-                        <article className="tag-row" key={tag.id}>
-                          <div className="tag-main">
-                            <span
-                              className="tag-dot"
-                              style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
-                            />
-                            <div>
-                              <strong>{tag.name}</strong>
-                              <p>
-                                {tag.category}
-                                {isPresetTag(tag) ? " · 预设" : " · 自定义"}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="row-actions">
-                            <button
-                              disabled={isPresetTag(tag)}
-                              title={isPresetTag(tag) ? "预设标签不可编辑" : undefined}
-                              type="button"
-                              onClick={() => handleEdit(tag)}
-                            >
-                              编辑
-                            </button>
-                            <button
-                              className="danger-button"
-                              disabled={isPresetTag(tag)}
-                              title={isPresetTag(tag) ? "预设标签不可删除" : undefined}
-                              type="button"
-                              onClick={() => requestDeleteTag(tag)}
-                            >
-                              删除
-                            </button>
-                          </div>
-                          {pendingDeleteTag?.id === tag.id && (
-                            <div className="inline-confirm">
-                              <p>确定删除标签「{tag.name}」吗？</p>
-                              <div className="row-actions">
-                                <button
-                                  className="danger-button"
-                                  type="button"
-                                  onClick={() => void confirmDeleteTag()}
-                                >
-                                  确认删除
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPendingDeleteTag(null);
-                                  }}
-                                >
-                                  取消
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </article>
-                      ))}
+              {tags.map((tag) => (
+                <article className="tag-table-row" key={tag.id}>
+                  <div className="tag-cell tag-name-cell">
+                    <span
+                      className="tag-dot"
+                      style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
+                    />
+                    <strong>{tag.name}</strong>
+                  </div>
+                  <div className="tag-cell">
+                    <span className="tag-category-pill">
+                      {categoryLabel(tag.category)}
+                    </span>
+                  </div>
+                  <div className="tag-cell">
+                    <span
+                      className={
+                        isPresetTag(tag)
+                          ? "tag-type-pill tag-type-pill--preset"
+                          : "tag-type-pill"
+                      }
+                    >
+                      {isPresetTag(tag) ? "预设" : "自定义"}
+                    </span>
+                  </div>
+                  <div className="tag-table-actions">
+                    <button
+                      disabled={isPresetTag(tag)}
+                      title={isPresetTag(tag) ? "预设标签不可编辑" : undefined}
+                      type="button"
+                      onClick={() => handleEdit(tag)}
+                    >
+                      编辑
+                    </button>
+                    <button
+                      className="danger-button"
+                      disabled={isPresetTag(tag)}
+                      title={isPresetTag(tag) ? "预设标签不可删除" : undefined}
+                      type="button"
+                      onClick={() => requestDeleteTag(tag)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                  {pendingDeleteTag?.id === tag.id && (
+                    <div className="inline-confirm tag-row-confirm">
+                      <p>确定删除标签「{tag.name}」吗？</p>
+                      <div className="row-actions">
+                        <button
+                          className="danger-button"
+                          type="button"
+                          onClick={() => void confirmDeleteTag()}
+                        >
+                          确认删除
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingDeleteTag(null);
+                          }}
+                        >
+                          取消
+                        </button>
+                      </div>
                     </div>
                   )}
-                </section>
+                </article>
               ))}
             </div>
           )}
@@ -337,6 +332,12 @@ function isPresetTag(tag: Tag | null): boolean {
 
 function isValidHexColor(color: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(color);
+}
+
+function categoryLabel(category: TagCategory): string {
+  return (
+    tagCategories.find((item) => item.value === category)?.label ?? category
+  );
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {

@@ -150,7 +150,7 @@ export default function ProjectsPage() {
       </header>
 
       <div className="crud-layout">
-        <form className="form-panel" onSubmit={handleSubmit}>
+        <form className="form-panel sticky-form-panel" onSubmit={handleSubmit}>
           <div className="section-heading">
             <h2>{isEditing ? "编辑项目" : "新建项目"}</h2>
             {isEditing && (

@@ -15,7 +15,7 @@
 
 body {
   margin: 0;
-  min-width: 1024px;
+  min-width: 0;
   min-height: 100vh;
 }
 
@@ -238,6 +238,14 @@ a {
   grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
 }
 
+.sticky-form-panel {
+  position: sticky;
+  top: 96px;
+  align-self: start;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+}
+
 .form-panel,
 .list-panel,
 .entity-card,
@@ -297,6 +305,8 @@ a {
 .primary-button,
 .toolbar button,
 .row-actions button,
+.filter-actions button,
+.tag-table-actions button,
 .section-heading button,
 .text-button {
   border: 1px solid #cfc7bb;
@@ -340,13 +350,15 @@ button:disabled {
 
 .filter-panel {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(140px, 180px) minmax(130px, 160px) minmax(130px, 160px);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
   margin-bottom: 16px;
+  max-width: 100%;
 }
 
 .filter-panel input,
 .filter-panel select {
+  min-width: 0;
   width: 100%;
   border: 1px solid #d6d0c7;
   border-radius: 8px;
@@ -355,9 +367,19 @@ button:disabled {
   background: #ffffff;
 }
 
+.filter-search {
+  grid-column: span 2;
+}
+
 .filter-actions {
-  grid-column: 1 / -1;
-  margin-top: 0;
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.filter-actions button {
+  flex: 0 0 auto;
 }
 
 .entity-list,
@@ -512,6 +534,91 @@ button:disabled {
   border-radius: 50%;
 }
 
+.tag-table {
+  overflow: hidden;
+  border: 1px solid #ded8ce;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tag-table-header,
+.tag-table-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(110px, 1fr) minmax(90px, 0.8fr) minmax(130px, auto);
+  gap: 10px;
+  align-items: center;
+}
+
+.tag-table-header {
+  padding: 9px 12px;
+  color: #776b5f;
+  background: #f3ecdf;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tag-table-row {
+  border-top: 1px solid #eee5d8;
+  padding: 8px 12px;
+}
+
+.tag-cell,
+.tag-name-cell {
+  min-width: 0;
+}
+
+.tag-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-name-cell strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #2f2a25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-category-pill,
+.tag-type-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #e1d7c9;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #5b5148;
+  background: #fffaf3;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tag-type-pill {
+  color: #73511a;
+  background: #fff6df;
+}
+
+.tag-type-pill--preset {
+  color: #54606b;
+  background: #eef2f5;
+}
+
+.tag-table-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.tag-table-actions button {
+  padding: 6px 9px;
+}
+
+.tag-row-confirm {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
 .checkbox-grid {
   display: grid;
   max-height: 220px;
@@ -557,4 +664,45 @@ button:disabled {
   color: #3b342e;
   background: #ffffff;
   font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .app-shell,
+  .crud-layout,
+  .inspiration-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .sticky-form-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .filter-search {
+    grid-column: 1 / -1;
+  }
+
+  .tag-table-header {
+    display: none;
+  }
+
+  .tag-table-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .tag-table-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 1180px) {
+  .filter-search {
+    grid-column: 1 / -1;
+  }
 }

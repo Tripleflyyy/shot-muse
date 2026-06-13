@@ -350,8 +350,9 @@ export default function InspirationLibraryPage() {
         </form>
 
         <section className="list-panel">
-          <form className="filter-panel" onSubmit={handleFilterSubmit}>
+          <form className="filter-panel filter-toolbar" onSubmit={handleFilterSubmit}>
             <input
+              className="filter-search"
               value={filters.keyword}
               onChange={(event) =>
                 setFilters((current) => ({
@@ -413,7 +414,7 @@ export default function InspirationLibraryPage() {
               ))}
             </select>
 
-            <div className="row-actions filter-actions">
+            <div className="filter-actions">
               <button type="submit">筛选</button>
               <button type="button" onClick={clearFilters}>
                 清空
