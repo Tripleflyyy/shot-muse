@@ -8,13 +8,3 @@ node_modules/
 
 # macOS
 .DS_Store
-
-# Build artifacts
-dist/
-src-tauri/target/
-
-# Dependencies
-node_modules/
-
-# macOS
-.DS_Store
