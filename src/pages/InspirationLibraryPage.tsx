@@ -350,7 +350,10 @@ export default function InspirationLibraryPage() {
         </form>
 
         <section className="list-panel">
-          <form className="filter-panel" onSubmit={handleFilterSubmit}>
+          <form
+            className="filter-panel search-filter-panel"
+            onSubmit={handleFilterSubmit}
+          >
             <div className="search-filter-bar">
               <input
                 className="search-filter-input"
@@ -380,16 +383,18 @@ export default function InspirationLibraryPage() {
                   </option>
                 ))}
               </select>
-              <button className="search-filter-button" type="submit">
-                筛选
-              </button>
-              <button
-                className="search-filter-reset"
-                type="button"
-                onClick={clearFilters}
-              >
-                清空
-              </button>
+              <div className="search-filter-actions">
+                <button className="search-filter-button" type="submit">
+                  筛选
+                </button>
+                <button
+                  className="search-filter-reset"
+                  type="button"
+                  onClick={clearFilters}
+                >
+                  清空
+                </button>
+              </div>
             </div>
             <p className="filter-result-text">{cards.length} 条灵感结果</p>
           </form>

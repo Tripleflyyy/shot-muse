@@ -383,7 +383,7 @@ export default function TagsPage() {
             </button>
           </div>
 
-          <div className="tag-filter-panel">
+          <div className="tag-filter-panel search-filter-panel">
             <div className="search-filter-bar">
               <input
                 className="search-filter-input"
@@ -405,19 +405,21 @@ export default function TagsPage() {
                   </option>
                 ))}
               </select>
-              <button className="search-filter-button" type="button">
-                筛选
-              </button>
-              <button
-                className="search-filter-reset"
-                type="button"
-                onClick={() => {
-                  setSearchKeyword("");
-                  setCategoryFilter("all");
-                }}
-              >
-                清空
-              </button>
+              <div className="search-filter-actions">
+                <button className="search-filter-button" type="button">
+                  筛选
+                </button>
+                <button
+                  className="search-filter-reset"
+                  type="button"
+                  onClick={() => {
+                    setSearchKeyword("");
+                    setCategoryFilter("all");
+                  }}
+                >
+                  清空
+                </button>
+              </div>
             </div>
             <p className="filter-result-text">{filteredTagCount} 个匹配标签</p>
           </div>
