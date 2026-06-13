@@ -297,35 +297,40 @@ export default function TagsPage() {
             </select>
           </label>
 
-          <label className="field">
+          <div className="field">
             <span>颜色</span>
-            <select
-              disabled={isEditingPreset}
-              value={form.color}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  color: event.target.value,
-                }))
-              }
+            <div
+              aria-label="选择标签颜色"
+              className={isEditingPreset ? "tag-color-palette is-disabled" : "tag-color-palette"}
             >
               {tagColorOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label} {option.value}
-                </option>
+                <button
+                  aria-label={`选择${option.label}`}
+                  className={
+                    form.color === option.value
+                      ? "tag-color-swatch selected"
+                      : "tag-color-swatch"
+                  }
+                  disabled={isEditingPreset}
+                  key={option.value}
+                  style={{ "--swatch-color": option.value } as CSSProperties}
+                  title={option.label}
+                  type="button"
+                  onClick={() =>
+                    setForm((current) => ({ ...current, color: option.value }))
+                  }
+                >
+                  {form.color === option.value && (
+                    <span className="tag-color-check">✓</span>
+                  )}
+                </button>
               ))}
-            </select>
-          </label>
-
-          <div className="tag-color-preview">
-            <span
-              className="tag-dot"
-              style={{ backgroundColor: form.color || "#d6d0c7" }}
-            />
-            <span>
+            </div>
+            <p className="field-hint">
+              当前颜色：
               {tagColorOptions.find((option) => option.value === form.color)
-                ?.label ?? "自定义颜色"}
-            </span>
+                ?.label ?? "默认"}
+            </p>
           </div>
 
           <button
@@ -335,20 +340,6 @@ export default function TagsPage() {
           >
             {isSaving ? "保存中..." : editingTagId ? "保存修改" : "创建标签"}
           </button>
-
-          {editingTag && (
-            <div className="form-secondary-actions">
-              <button
-                className="danger-button"
-                disabled={isEditingPreset}
-                title={isEditingPreset ? "预设标签不可删除" : undefined}
-                type="button"
-                onClick={() => requestDeleteTag(editingTag)}
-              >
-                删除标签
-              </button>
-            </div>
-          )}
 
           {pendingDeleteTag && (
             <div className="inline-confirm">
@@ -383,34 +374,59 @@ export default function TagsPage() {
           </div>
 
           <div className="tag-filter-panel">
-            <input
-              value={searchKeyword}
-              onChange={(event) => setSearchKeyword(event.target.value)}
-              placeholder="搜索标签名或分类"
-            />
-            <select
-              value={categoryFilter}
-              onChange={(event) =>
-                setCategoryFilter(event.target.value as "all" | TagCategory)
-              }
-            >
-              <option value="all">全部分类</option>
-              {tagCategories.map((category) => (
-                <option key={category.value} value={category.value}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={typeFilter}
-              onChange={(event) =>
-                setTypeFilter(event.target.value as TagTypeFilter)
-              }
-            >
-              <option value="all">全部类型</option>
-              <option value="preset">预设</option>
-              <option value="custom">自定义</option>
-            </select>
+            <div className="filter-panel-title">
+              <strong>检索标签</strong>
+              <span>{filteredTagCount} 个匹配</span>
+            </div>
+            <div className="tag-filter-search">
+              <input
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
+                placeholder="搜索标签名、分类..."
+              />
+            </div>
+            <div className="tag-filter-controls">
+              <label className="filter-field">
+                <span>分类</span>
+                <select
+                  value={categoryFilter}
+                  onChange={(event) =>
+                    setCategoryFilter(event.target.value as "all" | TagCategory)
+                  }
+                >
+                  <option value="all">全部分类</option>
+                  {tagCategories.map((category) => (
+                    <option key={category.value} value={category.value}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="filter-field">
+                <span>类型</span>
+                <select
+                  value={typeFilter}
+                  onChange={(event) =>
+                    setTypeFilter(event.target.value as TagTypeFilter)
+                  }
+                >
+                  <option value="all">全部类型</option>
+                  <option value="preset">预设</option>
+                  <option value="custom">自定义</option>
+                </select>
+              </label>
+              <button
+                className="filter-reset-button"
+                type="button"
+                onClick={() => {
+                  setSearchKeyword("");
+                  setCategoryFilter("all");
+                  setTypeFilter("all");
+                }}
+              >
+                清空筛选
+              </button>
+            </div>
           </div>
 
           {isLoading ? (

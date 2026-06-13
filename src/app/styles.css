@@ -351,13 +351,14 @@ button:disabled {
 
 .filter-panel {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 16px;
   max-width: 100%;
   border: 1px solid #e1d8c9;
   border-radius: 8px;
-  padding: 14px;
-  background: #fff6e9;
+  padding: 16px;
+  background: linear-gradient(180deg, #fffaf3 0%, #fff5e7 100%);
+  box-shadow: 0 1px 0 rgba(42, 35, 27, 0.04);
 }
 
 .filter-panel input,
@@ -376,20 +377,51 @@ button:disabled {
   background: #ffffff;
 }
 
+.filter-panel input:focus,
+.filter-panel select:focus,
+.tag-filter-panel input:focus,
+.tag-filter-panel select:focus {
+  border-color: #c8973f;
+  box-shadow: 0 0 0 3px rgba(200, 151, 63, 0.16);
+  outline: none;
+}
+
+.filter-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.filter-panel-title strong {
+  color: #2f2a25;
+  font-size: 13px;
+}
+
+.filter-panel-title span {
+  color: #7a7066;
+  font-size: 12px;
+}
+
+.filter-panel-title--subtle {
+  margin-top: 4px;
+}
+
 .filter-search-row {
   min-width: 0;
 }
 
 .filter-search {
-  min-height: 44px;
-  border-color: #c8973f !important;
-  background: #fffdf8 !important;
+  min-height: 46px;
+  border-color: #d8b870 !important;
+  background: #fffefd !important;
   font-weight: 600;
 }
 
 .filter-controls-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
   align-items: end;
   min-width: 0;
@@ -417,6 +449,11 @@ button:disabled {
 
 .filter-actions button {
   flex: 0 0 auto;
+}
+
+.filter-reset-button {
+  color: #6f6256 !important;
+  background: #fffaf3 !important;
 }
 
 .entity-list,
@@ -580,6 +617,61 @@ button:disabled {
   font-size: 13px;
 }
 
+.field-hint {
+  margin: -2px 0 0;
+  color: #7a7066;
+  font-size: 12px;
+}
+
+.tag-color-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  border: 1px solid #ebe3d6;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.tag-color-palette.is-disabled {
+  opacity: 0.58;
+}
+
+.tag-color-swatch {
+  position: relative;
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--swatch-color);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+}
+
+.tag-color-swatch:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 4px 10px rgba(49, 39, 29, 0.12);
+}
+
+.tag-color-swatch.selected {
+  border-color: #2f2a25;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 0 0 3px rgba(47, 42, 37, 0.09);
+}
+
+.tag-color-check {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
 .tag-table {
   overflow: hidden;
   border: 1px solid #ded8ce;
@@ -703,13 +795,31 @@ button:disabled {
 
 .tag-filter-panel {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(140px, 180px) minmax(120px, 160px);
-  gap: 10px;
+  gap: 12px;
   border: 1px solid #e1d8c9;
   border-radius: 8px;
   margin-bottom: 16px;
-  padding: 12px;
-  background: #fff6e9;
+  padding: 16px;
+  background: linear-gradient(180deg, #fffaf3 0%, #fff5e7 100%);
+  box-shadow: 0 1px 0 rgba(42, 35, 27, 0.04);
+}
+
+.tag-filter-search {
+  min-width: 0;
+}
+
+.tag-filter-search input {
+  min-height: 46px;
+  border-color: #d8b870 !important;
+  background: #fffefd !important;
+  font-weight: 600;
+}
+
+.tag-filter-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  align-items: end;
 }
 
 .tag-chip-board {
@@ -766,11 +876,11 @@ button:disabled {
   max-width: 240px;
   border: 1px solid var(--tag-color, #d6d0c7);
   border-radius: 999px;
-  padding: 8px 11px;
+  padding: 7px 10px;
   color: var(--tag-color, #2f2a25);
   background: var(--tag-bg, #fffaf3);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -871,7 +981,7 @@ button:disabled {
   padding: 5px 9px;
   color: var(--tag-color, #3b342e);
   background: var(--tag-bg, #ffffff);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
