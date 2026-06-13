@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 
 import {
   createCustomTag,
@@ -17,7 +17,7 @@ type TagFormState = {
 };
 
 const tagCategories: Array<{ value: TagCategory; label: string }> = [
-  { value: "subject", label: "题材" },
+  { value: "subject", label: "主体" },
   { value: "lighting", label: "光线" },
   { value: "composition", label: "构图" },
   { value: "color", label: "色彩" },
@@ -26,16 +26,33 @@ const tagCategories: Array<{ value: TagCategory; label: string }> = [
   { value: "custom", label: "自定义" },
 ];
 
+const tagColorOptions = [
+  { label: "琥珀", value: "#d9902f" },
+  { label: "珊瑚", value: "#e76f51" },
+  { label: "玫瑰", value: "#d95f8d" },
+  { label: "紫藤", value: "#8e7cc3" },
+  { label: "天空", value: "#5b8def" },
+  { label: "湖蓝", value: "#3aa6b9" },
+  { label: "薄荷", value: "#4caf50" },
+  { label: "青绿", value: "#2a9d8f" },
+  { label: "橄榄", value: "#8aa63f" },
+  { label: "石墨", value: "#666666" },
+];
+
 const emptyTagForm: TagFormState = {
   name: "",
   category: "custom",
-  color: "",
+  color: tagColorOptions[0].value,
 };
 
 export default function TagsPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [form, setForm] = useState<TagFormState>(emptyTagForm);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | TagCategory>(
+    "all",
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDeleteTag, setPendingDeleteTag] = useState<Tag | null>(null);
@@ -46,6 +63,36 @@ export default function TagsPage() {
   );
 
   const isEditingPreset = isPresetTag(editingTag);
+
+  const filteredGroups = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase();
+    const filteredTags = tags.filter((tag) => {
+      if (categoryFilter !== "all" && tag.category !== categoryFilter) {
+        return false;
+      }
+
+      if (!keyword) {
+        return true;
+      }
+
+      return [tag.name, tag.category, categoryLabel(tag.category)]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword);
+    });
+
+    return tagCategories
+      .map((category) => ({
+        ...category,
+        tags: filteredTags.filter((tag) => tag.category === category.value),
+      }))
+      .filter((group) => group.tags.length > 0);
+  }, [categoryFilter, searchKeyword, tags]);
+
+  const filteredTagCount = filteredGroups.reduce(
+    (total, group) => total + group.tags.length,
+    0,
+  );
 
   async function loadTags() {
     setIsLoading(true);
@@ -71,9 +118,14 @@ export default function TagsPage() {
       return;
     }
 
+    if (isEditingPreset) {
+      alert("预设标签不可编辑");
+      return;
+    }
+
     const color = form.color.trim();
-    if (color && !isValidHexColor(color)) {
-      alert("颜色格式错误：标签颜色格式必须为 #RRGGBB");
+    if (!isValidHexColor(color)) {
+      alert("请选择有效的标签颜色");
       return;
     }
 
@@ -104,11 +156,18 @@ export default function TagsPage() {
 
   function handleEdit(tag: Tag) {
     setEditingTagId(tag.id);
+    setPendingDeleteTag(null);
     setForm({
       name: tag.name,
       category: tag.category,
-      color: tag.color ?? "",
+      color: isValidHexColor(tag.color) ? tag.color : tagColorOptions[0].value,
     });
+  }
+
+  function requestDeleteFromChip(event: MouseEvent<HTMLElement>, tag: Tag) {
+    event.stopPropagation();
+    handleEdit(tag);
+    requestDeleteTag(tag);
   }
 
   function requestDeleteTag(tag: Tag) {
@@ -154,17 +213,9 @@ export default function TagsPage() {
 
   function resetForm() {
     setEditingTagId(null);
+    setPendingDeleteTag(null);
     setForm(emptyTagForm);
   }
-
-  const groupedTags = useMemo(
-    () =>
-      tagCategories.map((category) => ({
-        ...category,
-        tags: tags.filter((tag) => tag.category === category.value),
-      })),
-    [tags],
-  );
 
   return (
     <section className="page-frame">
@@ -177,19 +228,36 @@ export default function TagsPage() {
       </header>
 
       <div className="crud-layout">
-        <form className="form-panel" onSubmit={handleSubmit}>
+        <form className="form-panel sticky-form-panel" onSubmit={handleSubmit}>
           <div className="section-heading">
-            <h2>{editingTagId ? "编辑标签" : "新建自定义标签"}</h2>
+            <h2>{editingTagId ? "标签详情" : "新建自定义标签"}</h2>
             {editingTagId && (
               <button className="text-button" type="button" onClick={resetForm}>
-                取消编辑
+                新建标签
               </button>
             )}
           </div>
 
+          {editingTag && (
+            <div className="selected-tag-summary">
+              <span
+                className="tag-dot"
+                style={{ backgroundColor: editingTag.color ?? "#d6d0c7" }}
+              />
+              <div>
+                <strong>#{editingTag.name}</strong>
+                <p>
+                  {categoryLabel(editingTag.category)} ·{" "}
+                  {isEditingPreset ? "预设标签" : "自定义标签"}
+                </p>
+              </div>
+            </div>
+          )}
+
           <label className="field">
             <span>标签名称 *</span>
             <input
+              disabled={isEditingPreset}
               value={form.name}
               onChange={(event) =>
                 setForm((current) => ({ ...current, name: event.target.value }))
@@ -218,108 +286,202 @@ export default function TagsPage() {
             </select>
           </label>
 
-          <label className="field">
+          <div className="field">
             <span>颜色</span>
-            <input
-              value={form.color}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  color: event.target.value,
-                }))
-              }
-              placeholder="#FFAA00"
-            />
-          </label>
+            <div className={isEditingPreset ? "tag-color-picker is-disabled" : "tag-color-picker"}>
+              <div className="tag-color-picker-main">
+                <span
+                  aria-hidden="true"
+                  className="tag-color-preview-dot"
+                  style={{ backgroundColor: form.color }}
+                />
+                <label className="tag-color-native-button">
+                  <span>调色盘</span>
+                  <input
+                    aria-label="打开调色盘选择标签颜色"
+                    disabled={isEditingPreset}
+                    type="color"
+                    value={form.color}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        color: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <span className="tag-color-value">{form.color}</span>
+              </div>
 
-          <button className="primary-button" disabled={isSaving} type="submit">
+              <div aria-label="常用标签颜色" className="tag-color-palette">
+                {tagColorOptions.map((option) => (
+                  <button
+                    aria-label={`选择${option.label}`}
+                    className={
+                      form.color.toLowerCase() === option.value.toLowerCase()
+                        ? "tag-color-swatch selected"
+                        : "tag-color-swatch"
+                    }
+                    disabled={isEditingPreset}
+                    key={option.value}
+                    style={{ "--swatch-color": option.value } as CSSProperties}
+                    title={option.label}
+                    type="button"
+                    onClick={() =>
+                      setForm((current) => ({ ...current, color: option.value }))
+                    }
+                  >
+                    {form.color.toLowerCase() === option.value.toLowerCase() && (
+                      <span className="tag-color-check">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="field-hint">
+              可用调色盘自由选择，也可以点击常用色快速设置。
+            </p>
+          </div>
+
+          <button
+            className="primary-button"
+            disabled={isSaving || isEditingPreset}
+            type="submit"
+          >
             {isSaving ? "保存中..." : editingTagId ? "保存修改" : "创建标签"}
           </button>
+
+          {pendingDeleteTag && (
+            <div className="inline-confirm">
+              <p>确定删除标签「{pendingDeleteTag.name}」吗？</p>
+              <div className="row-actions">
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => void confirmDeleteTag()}
+                >
+                  确认删除
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingDeleteTag(null);
+                  }}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
         </form>
 
         <section className="list-panel">
           <div className="section-heading">
-            <h2>全部标签</h2>
+            <h2>标签库</h2>
             <button type="button" onClick={() => void loadTags()}>
               刷新
             </button>
           </div>
 
+          <div className="tag-filter-panel search-filter-panel">
+            <div className="search-filter-bar">
+              <input
+                className="search-filter-input"
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
+                placeholder="搜索标签名、分类..."
+              />
+              <select
+                className="search-filter-select"
+                value={categoryFilter}
+                onChange={(event) =>
+                  setCategoryFilter(event.target.value as "all" | TagCategory)
+                }
+              >
+                <option value="all">全部分类</option>
+                {tagCategories.map((category) => (
+                  <option key={category.value} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+              <div className="search-filter-actions">
+                <button className="search-filter-button" type="button">
+                  筛选
+                </button>
+                <button
+                  className="search-filter-reset"
+                  type="button"
+                  onClick={() => {
+                    setSearchKeyword("");
+                    setCategoryFilter("all");
+                  }}
+                >
+                  清空
+                </button>
+              </div>
+            </div>
+            <p className="filter-result-text">{filteredTagCount} 个匹配标签</p>
+          </div>
+
           {isLoading ? (
             <p className="muted-text">正在加载标签...</p>
+          ) : tags.length === 0 ? (
+            <p className="empty-message">暂无标签</p>
+          ) : filteredTagCount === 0 ? (
+            <p className="empty-message">没有匹配的标签</p>
           ) : (
-            <div className="tag-group-list">
-              {groupedTags.map((group) => (
-                <section className="tag-group" key={group.value}>
-                  <h3>
-                    {group.label}
-                    <span>{group.value}</span>
-                  </h3>
-
-                  {group.tags.length === 0 ? (
-                    <p className="empty-message">暂无标签</p>
-                  ) : (
-                    <div className="tag-list">
-                      {group.tags.map((tag) => (
-                        <article className="tag-row" key={tag.id}>
-                          <div className="tag-main">
-                            <span
-                              className="tag-dot"
-                              style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
-                            />
-                            <div>
-                              <strong>{tag.name}</strong>
-                              <p>
-                                {tag.category}
-                                {isPresetTag(tag) ? " · 预设" : " · 自定义"}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="row-actions">
-                            <button
-                              disabled={isPresetTag(tag)}
-                              title={isPresetTag(tag) ? "预设标签不可编辑" : undefined}
-                              type="button"
-                              onClick={() => handleEdit(tag)}
-                            >
-                              编辑
-                            </button>
-                            <button
-                              className="danger-button"
-                              disabled={isPresetTag(tag)}
-                              title={isPresetTag(tag) ? "预设标签不可删除" : undefined}
-                              type="button"
-                              onClick={() => requestDeleteTag(tag)}
-                            >
-                              删除
-                            </button>
-                          </div>
-                          {pendingDeleteTag?.id === tag.id && (
-                            <div className="inline-confirm">
-                              <p>确定删除标签「{tag.name}」吗？</p>
-                              <div className="row-actions">
-                                <button
-                                  className="danger-button"
-                                  type="button"
-                                  onClick={() => void confirmDeleteTag()}
-                                >
-                                  确认删除
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPendingDeleteTag(null);
-                                  }}
-                                >
-                                  取消
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </article>
-                      ))}
+            <div className="tag-chip-board">
+              {filteredGroups.map((group) => (
+                <section className="tag-chip-group" key={group.value}>
+                  <div className="tag-group-header">
+                    <div>
+                      <h3>{group.label}</h3>
+                      <p>{group.value}</p>
                     </div>
-                  )}
+                    <span>{group.tags.length}</span>
+                  </div>
+
+                  <div className="tag-chip-cloud">
+                    {group.tags.map((tag) => (
+                      <button
+                        className={
+                          editingTagId === tag.id
+                            ? "tag-manage-chip tag-manage-chip--selected"
+                            : "tag-manage-chip"
+                        }
+                        key={tag.id}
+                        style={tagChipStyle(tag)}
+                        type="button"
+                        onClick={() => handleEdit(tag)}
+                      >
+                        <span
+                          className="tag-chip-color"
+                          style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
+                        />
+                        <span>#{tag.name}</span>
+                        {!isPresetTag(tag) && (
+                          <span
+                            aria-label={`删除标签 ${tag.name}`}
+                            className="tag-chip-remove"
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => requestDeleteFromChip(event, tag)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleEdit(tag);
+                                requestDeleteTag(tag);
+                              }
+                            }}
+                          >
+                            ×
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </section>
               ))}
             </div>
@@ -335,8 +497,29 @@ function isPresetTag(tag: Tag | null): boolean {
   return value === true || value === 1 || value === "1";
 }
 
-function isValidHexColor(color: string): boolean {
-  return /^#[0-9A-Fa-f]{6}$/.test(color);
+function categoryLabel(category: TagCategory): string {
+  return (
+    tagCategories.find((item) => item.value === category)?.label ?? category
+  );
+}
+
+function tagChipStyle(tag: Tag): CSSProperties {
+  const color = isValidHexColor(tag.color) ? tag.color : "#8a6f3d";
+  return {
+    "--tag-color": color,
+    "--tag-bg": softTagBackground(color),
+  } as CSSProperties;
+}
+
+function isValidHexColor(color: string | null | undefined): color is string {
+  return Boolean(color && /^#[0-9A-Fa-f]{6}$/.test(color));
+}
+
+function softTagBackground(color: string): string {
+  const red = parseInt(color.slice(1, 3), 16);
+  const green = parseInt(color.slice(3, 5), 16);
+  const blue = parseInt(color.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, 0.12)`;
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {

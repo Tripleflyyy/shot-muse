@@ -50,6 +50,15 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
           FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS project_inspirations (
+          project_id TEXT NOT NULL,
+          inspiration_card_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, inspiration_card_id),
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (inspiration_card_id) REFERENCES inspiration_cards(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS shooting_plans (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL,
@@ -103,6 +112,9 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_inspiration_cards_collected_at
         ON inspiration_cards(collected_at);
+
+        CREATE INDEX IF NOT EXISTS idx_project_inspirations_inspiration_id
+        ON project_inspirations(inspiration_card_id);
 
         CREATE INDEX IF NOT EXISTS idx_shooting_plans_project_id
         ON shooting_plans(project_id);

@@ -1,6 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
+  attachInspirationToProject,
+  detachInspirationFromProject,
+  InspirationCard,
+  listInspirationCards,
+  listProjectInspirations,
+  SourcePlatform,
+} from "../services/inspirationApi";
+import {
   createProject,
   deleteProject,
   listProjects,
@@ -8,6 +16,7 @@ import {
   ProjectPayload,
   updateProject,
 } from "../services/projectApi";
+import { listTags, Tag } from "../services/tagApi";
 
 type ProjectFormState = {
   name: string;
@@ -16,6 +25,12 @@ type ProjectFormState = {
   location: string;
   planned_shooting_time: string;
   notes: string;
+};
+
+type ProjectInspirationFilters = {
+  keyword: string;
+  source_platform: "" | SourcePlatform;
+  tag_id: string;
 };
 
 const emptyProjectForm: ProjectFormState = {
@@ -27,17 +42,46 @@ const emptyProjectForm: ProjectFormState = {
   notes: "",
 };
 
+const emptyInspirationFilters: ProjectInspirationFilters = {
+  keyword: "",
+  source_platform: "",
+  tag_id: "",
+};
+
+const sourcePlatforms: Array<{ value: SourcePlatform; label: string }> = [
+  { value: "douyin", label: "抖音" },
+  { value: "xiaohongshu", label: "小红书" },
+  { value: "bilibili", label: "B站" },
+  { value: "youtube", label: "YouTube" },
+  { value: "instagram", label: "Instagram" },
+  { value: "other", label: "其他" },
+];
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [keyword, setKeyword] = useState("");
   const [form, setForm] = useState<ProjectFormState>(emptyProjectForm);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [projectInspirations, setProjectInspirations] = useState<InspirationCard[]>([]);
+  const [availableInspirations, setAvailableInspirations] = useState<InspirationCard[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [inspirationFilters, setInspirationFilters] =
+    useState<ProjectInspirationFilters>(emptyInspirationFilters);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReferenceLoading, setIsReferenceLoading] = useState(false);
   const [pendingDeleteProject, setPendingDeleteProject] =
     useState<Project | null>(null);
 
   const isEditing = editingProjectId !== null;
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === editingProjectId) ?? null,
+    [editingProjectId, projects],
+  );
+  const linkedInspirationIds = useMemo(
+    () => new Set(projectInspirations.map((card) => card.id)),
+    [projectInspirations],
+  );
 
   async function loadProjects(searchKeyword = keyword) {
     setIsLoading(true);
@@ -53,6 +97,7 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     void loadProjects("");
+    void loadTags();
     // Run once on page mount; searches are triggered explicitly by the form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -95,9 +140,12 @@ export default function ProjectsPage() {
       theme: project.theme ?? "",
       description: project.description ?? "",
       location: project.location ?? "",
-      planned_shooting_time: project.planned_shooting_time ?? "",
+      planned_shooting_time: toDateTimeLocalValue(
+        project.planned_shooting_time,
+      ),
       notes: project.notes ?? "",
     });
+    void loadProjectReferences(project.id, inspirationFilters);
   }
 
   function handleDeleteProject(project: Project) {
@@ -137,6 +185,76 @@ export default function ProjectsPage() {
   function resetForm() {
     setEditingProjectId(null);
     setForm(emptyProjectForm);
+    setProjectInspirations([]);
+    setAvailableInspirations([]);
+    setInspirationFilters(emptyInspirationFilters);
+  }
+
+  async function loadTags() {
+    try {
+      setTags(await listTags());
+    } catch (error) {
+      alert(toErrorMessage(error, "加载标签失败"));
+    }
+  }
+
+  async function loadProjectReferences(
+    projectId: string,
+    filters = inspirationFilters,
+  ) {
+    setIsReferenceLoading(true);
+    try {
+      const [linked, available] = await Promise.all([
+        listProjectInspirations(projectId),
+        listInspirationCards({
+          keyword: optionalText(filters.keyword),
+          source_platform: filters.source_platform || null,
+          tag_ids: filters.tag_id ? [filters.tag_id] : [],
+        }),
+      ]);
+      setProjectInspirations(linked);
+      setAvailableInspirations(available);
+    } catch (error) {
+      alert(toErrorMessage(error, "加载项目参考灵感失败"));
+    } finally {
+      setIsReferenceLoading(false);
+    }
+  }
+
+  async function handleReferenceFilter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingProjectId) {
+      return;
+    }
+    await loadProjectReferences(editingProjectId, inspirationFilters);
+  }
+
+  async function addInspirationToProject(card: InspirationCard) {
+    if (!editingProjectId) {
+      alert("请先选择项目");
+      return;
+    }
+
+    try {
+      await attachInspirationToProject(editingProjectId, card.id);
+      await loadProjectReferences(editingProjectId);
+    } catch (error) {
+      alert(toErrorMessage(error, "加入项目参考灵感失败"));
+    }
+  }
+
+  async function removeInspirationFromProject(card: InspirationCard) {
+    if (!editingProjectId) {
+      alert("请先选择项目");
+      return;
+    }
+
+    try {
+      await detachInspirationFromProject(editingProjectId, card.id);
+      await loadProjectReferences(editingProjectId);
+    } catch (error) {
+      alert(toErrorMessage(error, "移除项目参考灵感失败"));
+    }
   }
 
   return (
@@ -150,7 +268,7 @@ export default function ProjectsPage() {
       </header>
 
       <div className="crud-layout">
-        <form className="form-panel" onSubmit={handleSubmit}>
+        <form className="form-panel sticky-form-panel" onSubmit={handleSubmit}>
           <div className="section-heading">
             <h2>{isEditing ? "编辑项目" : "新建项目"}</h2>
             {isEditing && (
@@ -215,6 +333,7 @@ export default function ProjectsPage() {
           <label className="field">
             <span>预计拍摄时间</span>
             <input
+              type="datetime-local"
               value={form.planned_shooting_time}
               onChange={(event) =>
                 setForm((current) => ({
@@ -222,7 +341,6 @@ export default function ProjectsPage() {
                   planned_shooting_time: event.target.value,
                 }))
               }
-              placeholder="例如：2026-06-20 16:00"
             />
           </label>
 
@@ -243,6 +361,130 @@ export default function ProjectsPage() {
           <button className="primary-button" disabled={isSaving} type="submit">
             {isSaving ? "保存中..." : submitLabel}
           </button>
+
+          {selectedProject && (
+            <section className="project-reference-panel">
+              <div className="section-heading">
+                <h2>项目参考灵感</h2>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void loadProjectReferences(selectedProject.id, inspirationFilters)
+                  }
+                >
+                  刷新
+                </button>
+              </div>
+
+              {isReferenceLoading ? (
+                <p className="muted-text">正在加载参考灵感...</p>
+              ) : (
+                <>
+                  <div className="reference-subsection">
+                    <h3>已选灵感</h3>
+                    {projectInspirations.length === 0 ? (
+                      <p className="empty-message">还没有为该项目选择参考灵感。</p>
+                    ) : (
+                      <div className="reference-card-list">
+                        {projectInspirations.map((card) => (
+                          <article className="reference-card" key={card.id}>
+                            <strong>{card.title}</strong>
+                            <p>
+                              {platformLabel(card.source_platform)}
+                              {card.author_name ? ` · ${card.author_name}` : ""}
+                            </p>
+                            <div className="mini-tag-list">
+                              {card.tags.map((tag) => (
+                                <span className="mini-tag" key={tag.id}>
+                                  #{tag.name}
+                                </span>
+                              ))}
+                            </div>
+                            <button
+                              className="danger-button"
+                              type="button"
+                              onClick={() => void removeInspirationFromProject(card)}
+                            >
+                              从项目移除
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <form className="reference-filter-panel" onSubmit={handleReferenceFilter}>
+                    <input
+                      value={inspirationFilters.keyword}
+                      onChange={(event) =>
+                        setInspirationFilters((current) => ({
+                          ...current,
+                          keyword: event.target.value,
+                        }))
+                      }
+                      placeholder="搜索全局灵感"
+                    />
+                    <select
+                      value={inspirationFilters.source_platform}
+                      onChange={(event) =>
+                        setInspirationFilters((current) => ({
+                          ...current,
+                          source_platform: event.target.value as "" | SourcePlatform,
+                        }))
+                      }
+                    >
+                      <option value="">全部平台</option>
+                      {sourcePlatforms.map((platform) => (
+                        <option key={platform.value} value={platform.value}>
+                          {platform.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={inspirationFilters.tag_id}
+                      onChange={(event) =>
+                        setInspirationFilters((current) => ({
+                          ...current,
+                          tag_id: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">全部标签</option>
+                      {tags.map((tag) => (
+                        <option key={tag.id} value={tag.id}>
+                          {tag.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit">筛选</button>
+                  </form>
+
+                  <div className="reference-subsection">
+                    <h3>从灵感库加入</h3>
+                    <div className="reference-card-list">
+                      {availableInspirations
+                        .filter((card) => !linkedInspirationIds.has(card.id))
+                        .map((card) => (
+                          <article className="reference-card" key={card.id}>
+                            <strong>{card.title}</strong>
+                            <p>
+                              {platformLabel(card.source_platform)}
+                              {card.author_name ? ` · ${card.author_name}` : ""}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => void addInspirationToProject(card)}
+                            >
+                              加入项目
+                            </button>
+                          </article>
+                        ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
         </form>
 
         <section className="list-panel">
@@ -335,15 +577,39 @@ export default function ProjectsPage() {
   );
 }
 
+function platformLabel(platform: SourcePlatform): string {
+  return (
+    sourcePlatforms.find((item) => item.value === platform)?.label ?? "其他"
+  );
+}
+
 function toProjectPayload(form: ProjectFormState): ProjectPayload {
   return {
     name: form.name,
     theme: optionalText(form.theme),
     description: optionalText(form.description),
     location: optionalText(form.location),
-    planned_shooting_time: optionalText(form.planned_shooting_time),
+    planned_shooting_time: optionalText(
+      fromDateTimeLocalValue(form.planned_shooting_time),
+    ),
     notes: optionalText(form.notes),
   };
+}
+
+function toDateTimeLocalValue(value?: string | null): string {
+  if (!value) {
+    return "";
+  }
+
+  return value.replace(" ", "T").slice(0, 16);
+}
+
+function fromDateTimeLocalValue(value: string): string {
+  if (!value) {
+    return "";
+  }
+
+  return value.replace("T", " ");
 }
 
 function optionalText(value: string): string | null {
