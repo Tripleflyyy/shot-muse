@@ -5,6 +5,7 @@ src-tauri/target/
 
 # Dependencies
 node_modules/
+node_modules/.vite/
 
 # macOS
 .DS_Store
