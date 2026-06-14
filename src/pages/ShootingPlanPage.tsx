@@ -1,5 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import { InspirationCard, SourcePlatform } from "../services/inspirationApi";
+import {
+  attachInspirationToShootingPlan,
+  detachInspirationFromShootingPlan,
+  listAvailableInspirationsForShootingPlan,
+  listShootingPlanInspirations,
+} from "../services/planInspirationApi";
 import { listProjects, Project } from "../services/projectApi";
 import {
   createShootingPlan,
@@ -32,6 +39,11 @@ type ShootingPlanFilterState = {
   status: "" | ShootingPlanStatus;
 };
 
+type PlanInspirationFilterState = {
+  keyword: string;
+  source_platform: "" | SourcePlatform;
+};
+
 const emptyForm: ShootingPlanFormState = {
   project_id: "",
   title: "",
@@ -53,6 +65,11 @@ const emptyFilters: ShootingPlanFilterState = {
   status: "",
 };
 
+const emptyInspirationFilters: PlanInspirationFilterState = {
+  keyword: "",
+  source_platform: "",
+};
+
 const statuses: Array<{ value: ShootingPlanStatus; label: string }> = [
   { value: "draft", label: "草稿" },
   { value: "ready", label: "准备完成" },
@@ -60,18 +77,39 @@ const statuses: Array<{ value: ShootingPlanStatus; label: string }> = [
   { value: "archived", label: "已归档" },
 ];
 
+const sourcePlatforms: Array<{ value: SourcePlatform; label: string }> = [
+  { value: "douyin", label: "抖音" },
+  { value: "xiaohongshu", label: "小红书" },
+  { value: "bilibili", label: "B站" },
+  { value: "youtube", label: "YouTube" },
+  { value: "instagram", label: "Instagram" },
+  { value: "other", label: "其他" },
+];
+
 export default function ShootingPlanPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [plans, setPlans] = useState<ShootingPlan[]>([]);
   const [form, setForm] = useState<ShootingPlanFormState>(emptyForm);
   const [filters, setFilters] = useState<ShootingPlanFilterState>(emptyFilters);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [linkedInspirations, setLinkedInspirations] = useState<InspirationCard[]>([]);
+  const [availableInspirations, setAvailableInspirations] = useState<InspirationCard[]>([]);
+  const [inspirationFilters, setInspirationFilters] =
+    useState<PlanInspirationFilterState>(emptyInspirationFilters);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [pendingDeletePlan, setPendingDeletePlan] =
     useState<ShootingPlan | null>(null);
+  const [pendingDetachInspiration, setPendingDetachInspiration] =
+    useState<InspirationCard | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReferenceLoading, setIsReferenceLoading] = useState(false);
 
   const isEditing = editingPlanId !== null;
+  const activePlan = useMemo(
+    () => plans.find((plan) => plan.id === activePlanId) ?? null,
+    [activePlanId, plans],
+  );
   const submitLabel = useMemo(
     () => (isEditing ? "保存修改" : "创建拍摄计划"),
     [isEditing],
@@ -149,7 +187,9 @@ export default function ShootingPlanPage() {
 
   function handleEdit(plan: ShootingPlan) {
     setEditingPlanId(plan.id);
+    setActivePlanId(plan.id);
     setPendingDeletePlan(null);
+    setPendingDetachInspiration(null);
     setForm({
       project_id: plan.project_id,
       title: plan.title,
@@ -164,6 +204,7 @@ export default function ShootingPlanPage() {
       notes: plan.notes ?? "",
       status: plan.status,
     });
+    void loadPlanReferences(plan.id, inspirationFilters);
   }
 
   function requestDeletePlan(plan: ShootingPlan) {
@@ -179,6 +220,9 @@ export default function ShootingPlanPage() {
       await deleteShootingPlan(pendingDeletePlan.id);
       if (editingPlanId === pendingDeletePlan.id) {
         resetForm();
+      }
+      if (activePlanId === pendingDeletePlan.id) {
+        clearReferenceState();
       }
       setPendingDeletePlan(null);
       await loadPlans();
@@ -202,6 +246,93 @@ export default function ShootingPlanPage() {
     setEditingPlanId(null);
     setPendingDeletePlan(null);
     setForm(emptyForm);
+  }
+
+  function clearReferenceState() {
+    setActivePlanId(null);
+    setLinkedInspirations([]);
+    setAvailableInspirations([]);
+    setInspirationFilters(emptyInspirationFilters);
+    setPendingDetachInspiration(null);
+  }
+
+  function managePlanInspirations(plan: ShootingPlan) {
+    setActivePlanId(plan.id);
+    setPendingDetachInspiration(null);
+    void loadPlanReferences(plan.id, inspirationFilters);
+  }
+
+  async function loadPlanReferences(
+    planId: string,
+    nextFilters = inspirationFilters,
+  ) {
+    setIsReferenceLoading(true);
+    try {
+      const [linked, available] = await Promise.all([
+        listShootingPlanInspirations(planId),
+        listAvailableInspirationsForShootingPlan(planId, {
+          keyword: optionalText(nextFilters.keyword),
+          source_platform: nextFilters.source_platform || null,
+        }),
+      ]);
+      setLinkedInspirations(linked);
+      setAvailableInspirations(available);
+    } catch (error) {
+      alert(toErrorMessage(error, "加载计划参考灵感失败"));
+    } finally {
+      setIsReferenceLoading(false);
+    }
+  }
+
+  async function handleInspirationFilter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activePlanId) {
+      return;
+    }
+    await loadPlanReferences(activePlanId, inspirationFilters);
+  }
+
+  async function clearInspirationFilters() {
+    setInspirationFilters(emptyInspirationFilters);
+    if (activePlanId) {
+      await loadPlanReferences(activePlanId, emptyInspirationFilters);
+    }
+  }
+
+  async function addInspirationToPlan(card: InspirationCard) {
+    if (!activePlanId) {
+      alert("请先选择拍摄计划");
+      return;
+    }
+
+    try {
+      await attachInspirationToShootingPlan(activePlanId, card.id);
+      await loadPlanReferences(activePlanId);
+    } catch (error) {
+      alert(toErrorMessage(error, "加入计划参考灵感失败"));
+    }
+  }
+
+  function requestDetachInspiration(card: InspirationCard) {
+    setPendingDetachInspiration(card);
+  }
+
+  async function confirmDetachInspiration() {
+    if (!activePlanId || !pendingDetachInspiration) {
+      return;
+    }
+
+    try {
+      await detachInspirationFromShootingPlan(
+        activePlanId,
+        pendingDetachInspiration.id,
+      );
+      setPendingDetachInspiration(null);
+      await loadPlanReferences(activePlanId);
+    } catch (error) {
+      console.error("移除计划参考灵感失败", error);
+      alert(toErrorMessage(error, "移除计划参考灵感失败"));
+    }
   }
 
   return (
@@ -404,6 +535,165 @@ export default function ShootingPlanPage() {
         </form>
 
         <section className="list-panel">
+          {activePlan && (
+            <section className="plan-reference-panel">
+              <div className="section-heading">
+                <div>
+                  <h2>参考灵感</h2>
+                  <p className="muted-text">当前计划：{activePlan.title}</p>
+                </div>
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={clearReferenceState}
+                >
+                  关闭
+                </button>
+              </div>
+
+              {isReferenceLoading ? (
+                <p className="muted-text">正在加载参考灵感...</p>
+              ) : (
+                <>
+                  <div className="reference-subsection">
+                    <h3>已加入该计划</h3>
+                    {linkedInspirations.length === 0 ? (
+                      <p className="empty-message">还没有为该计划选择参考灵感。</p>
+                    ) : (
+                      <div className="reference-card-list">
+                        {linkedInspirations.map((card) => (
+                          <article className="reference-card" key={card.id}>
+                            <strong>{card.title}</strong>
+                            <p>
+                              {platformLabel(card.source_platform)}
+                              {card.author_name ? ` · ${card.author_name}` : ""}
+                            </p>
+                            {card.notes && <p className="note-text">{card.notes}</p>}
+                            <div className="mini-tag-list">
+                              {card.tags.map((tag) => (
+                                <span className="mini-tag" key={tag.id}>
+                                  #{tag.name}
+                                </span>
+                              ))}
+                            </div>
+                            <button
+                              className="danger-button"
+                              type="button"
+                              onClick={() => requestDetachInspiration(card)}
+                            >
+                              从计划移除
+                            </button>
+                            {pendingDetachInspiration?.id === card.id && (
+                              <div className="inline-confirm">
+                                <p>确定从计划中移除「{card.title}」吗？</p>
+                                <div className="row-actions">
+                                  <button
+                                    className="danger-button"
+                                    type="button"
+                                    onClick={() => void confirmDetachInspiration()}
+                                  >
+                                    确认移除
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingDetachInspiration(null)}
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <form
+                    className="search-filter-panel reference-search-panel"
+                    onSubmit={handleInspirationFilter}
+                  >
+                    <div className="filter-panel-title">
+                      <strong>从灵感库添加</strong>
+                      <span>{availableInspirations.length} 个可加入灵感</span>
+                    </div>
+                    <div className="search-filter-bar">
+                      <input
+                        className="search-filter-input"
+                        value={inspirationFilters.keyword}
+                        onChange={(event) =>
+                          setInspirationFilters((current) => ({
+                            ...current,
+                            keyword: event.target.value,
+                          }))
+                        }
+                        placeholder="搜索标题 / 作者 / 备注 / 链接 / 标签..."
+                      />
+                      <select
+                        className="search-filter-select"
+                        value={inspirationFilters.source_platform}
+                        onChange={(event) =>
+                          setInspirationFilters((current) => ({
+                            ...current,
+                            source_platform: event.target.value as "" | SourcePlatform,
+                          }))
+                        }
+                      >
+                        <option value="">全部平台</option>
+                        {sourcePlatforms.map((platform) => (
+                          <option key={platform.value} value={platform.value}>
+                            {platform.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="search-filter-actions">
+                        <button className="search-filter-button" type="submit">
+                          筛选
+                        </button>
+                        <button
+                          className="search-filter-reset"
+                          type="button"
+                          onClick={() => void clearInspirationFilters()}
+                        >
+                          清空
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  {availableInspirations.length === 0 ? (
+                    <p className="empty-message">没有匹配的可加入灵感。</p>
+                  ) : (
+                    <div className="reference-card-list">
+                      {availableInspirations.map((card) => (
+                        <article className="reference-card" key={card.id}>
+                          <strong>{card.title}</strong>
+                          <p>
+                            {platformLabel(card.source_platform)}
+                            {card.author_name ? ` · ${card.author_name}` : ""}
+                          </p>
+                          <div className="mini-tag-list">
+                            {card.tags.map((tag) => (
+                              <span className="mini-tag" key={tag.id}>
+                                #{tag.name}
+                              </span>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void addInspirationToPlan(card)}
+                          >
+                            加入计划
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
           <form className="search-filter-panel" onSubmit={handleFilter}>
             <div className="filter-panel-title">
               <strong>筛选拍摄计划</strong>
@@ -534,6 +824,12 @@ export default function ShootingPlanPage() {
                       编辑
                     </button>
                     <button
+                      type="button"
+                      onClick={() => managePlanInspirations(plan)}
+                    >
+                      管理参考灵感
+                    </button>
+                    <button
                       className="danger-button"
                       type="button"
                       onClick={() => requestDeletePlan(plan)}
@@ -591,6 +887,12 @@ function toPayload(form: ShootingPlanFormState): ShootingPlanPayload {
 
 function statusLabel(status: ShootingPlanStatus): string {
   return statuses.find((item) => item.value === status)?.label ?? "草稿";
+}
+
+function platformLabel(platform: string): string {
+  return (
+    sourcePlatforms.find((item) => item.value === platform)?.label ?? "其他"
+  );
 }
 
 function optionalText(value: string): string | null {
