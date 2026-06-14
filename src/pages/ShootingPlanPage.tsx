@@ -2,6 +2,11 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { InspirationCard, SourcePlatform } from "../services/inspirationApi";
 import {
+  getMediaAssetDisplayUrl,
+  listMediaAssetsByTarget,
+  MediaAsset,
+} from "../services/mediaApi";
+import {
   attachInspirationToShootingPlan,
   detachInspirationFromShootingPlan,
   listAvailableInspirationsForShootingPlan,
@@ -91,9 +96,13 @@ export default function ShootingPlanPage() {
   const [plans, setPlans] = useState<ShootingPlan[]>([]);
   const [form, setForm] = useState<ShootingPlanFormState>(emptyForm);
   const [filters, setFilters] = useState<ShootingPlanFilterState>(emptyFilters);
-  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [activeReferencePlanId, setActiveReferencePlanId] = useState<string | null>(null);
   const [linkedInspirations, setLinkedInspirations] = useState<InspirationCard[]>([]);
   const [availableInspirations, setAvailableInspirations] = useState<InspirationCard[]>([]);
+  const [inspirationCoverMap, setInspirationCoverMap] = useState<
+    Record<string, MediaAsset | null>
+  >({});
+  const [brokenCoverIds, setBrokenCoverIds] = useState<Set<string>>(new Set());
   const [inspirationFilters, setInspirationFilters] =
     useState<PlanInspirationFilterState>(emptyInspirationFilters);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -106,9 +115,9 @@ export default function ShootingPlanPage() {
   const [isReferenceLoading, setIsReferenceLoading] = useState(false);
 
   const isEditing = editingPlanId !== null;
-  const activePlan = useMemo(
-    () => plans.find((plan) => plan.id === activePlanId) ?? null,
-    [activePlanId, plans],
+  const activeReferencePlan = useMemo(
+    () => plans.find((plan) => plan.id === activeReferencePlanId) ?? null,
+    [activeReferencePlanId, plans],
   );
   const submitLabel = useMemo(
     () => (isEditing ? "保存修改" : "创建拍摄计划"),
@@ -187,9 +196,7 @@ export default function ShootingPlanPage() {
 
   function handleEdit(plan: ShootingPlan) {
     setEditingPlanId(plan.id);
-    setActivePlanId(plan.id);
     setPendingDeletePlan(null);
-    setPendingDetachInspiration(null);
     setForm({
       project_id: plan.project_id,
       title: plan.title,
@@ -204,7 +211,6 @@ export default function ShootingPlanPage() {
       notes: plan.notes ?? "",
       status: plan.status,
     });
-    void loadPlanReferences(plan.id, inspirationFilters);
   }
 
   function requestDeletePlan(plan: ShootingPlan) {
@@ -221,7 +227,7 @@ export default function ShootingPlanPage() {
       if (editingPlanId === pendingDeletePlan.id) {
         resetForm();
       }
-      if (activePlanId === pendingDeletePlan.id) {
+      if (activeReferencePlanId === pendingDeletePlan.id) {
         clearReferenceState();
       }
       setPendingDeletePlan(null);
@@ -249,15 +255,17 @@ export default function ShootingPlanPage() {
   }
 
   function clearReferenceState() {
-    setActivePlanId(null);
+    setActiveReferencePlanId(null);
     setLinkedInspirations([]);
     setAvailableInspirations([]);
+    setInspirationCoverMap({});
+    setBrokenCoverIds(new Set());
     setInspirationFilters(emptyInspirationFilters);
     setPendingDetachInspiration(null);
   }
 
   function managePlanInspirations(plan: ShootingPlan) {
-    setActivePlanId(plan.id);
+    setActiveReferencePlanId(plan.id);
     setPendingDetachInspiration(null);
     void loadPlanReferences(plan.id, inspirationFilters);
   }
@@ -277,6 +285,7 @@ export default function ShootingPlanPage() {
       ]);
       setLinkedInspirations(linked);
       setAvailableInspirations(available);
+      await loadInspirationCovers([...linked, ...available]);
     } catch (error) {
       alert(toErrorMessage(error, "加载计划参考灵感失败"));
     } finally {
@@ -286,28 +295,28 @@ export default function ShootingPlanPage() {
 
   async function handleInspirationFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activePlanId) {
+    if (!activeReferencePlanId) {
       return;
     }
-    await loadPlanReferences(activePlanId, inspirationFilters);
+    await loadPlanReferences(activeReferencePlanId, inspirationFilters);
   }
 
   async function clearInspirationFilters() {
     setInspirationFilters(emptyInspirationFilters);
-    if (activePlanId) {
-      await loadPlanReferences(activePlanId, emptyInspirationFilters);
+    if (activeReferencePlanId) {
+      await loadPlanReferences(activeReferencePlanId, emptyInspirationFilters);
     }
   }
 
   async function addInspirationToPlan(card: InspirationCard) {
-    if (!activePlanId) {
+    if (!activeReferencePlanId) {
       alert("请先选择拍摄计划");
       return;
     }
 
     try {
-      await attachInspirationToShootingPlan(activePlanId, card.id);
-      await loadPlanReferences(activePlanId);
+      await attachInspirationToShootingPlan(activeReferencePlanId, card.id);
+      await loadPlanReferences(activeReferencePlanId);
     } catch (error) {
       alert(toErrorMessage(error, "加入计划参考灵感失败"));
     }
@@ -318,21 +327,46 @@ export default function ShootingPlanPage() {
   }
 
   async function confirmDetachInspiration() {
-    if (!activePlanId || !pendingDetachInspiration) {
+    if (!activeReferencePlanId || !pendingDetachInspiration) {
       return;
     }
 
     try {
       await detachInspirationFromShootingPlan(
-        activePlanId,
+        activeReferencePlanId,
         pendingDetachInspiration.id,
       );
       setPendingDetachInspiration(null);
-      await loadPlanReferences(activePlanId);
+      await loadPlanReferences(activeReferencePlanId);
     } catch (error) {
       console.error("移除计划参考灵感失败", error);
       alert(toErrorMessage(error, "移除计划参考灵感失败"));
     }
+  }
+
+  async function loadInspirationCovers(cards: InspirationCard[]) {
+    const uniqueCards = cards.filter(
+      (card, index, allCards) =>
+        allCards.findIndex((candidate) => candidate.id === card.id) === index,
+    );
+
+    const entries = await Promise.all(
+      uniqueCards.map(async (card) => {
+        try {
+          const media = await listMediaAssetsByTarget("inspiration", card.id);
+          return [card.id, media[0] ?? null] as const;
+        } catch (error) {
+          console.error("加载参考灵感封面失败", { cardId: card.id, error });
+          return [card.id, null] as const;
+        }
+      }),
+    );
+
+    setInspirationCoverMap((current) => ({
+      ...current,
+      ...Object.fromEntries(entries),
+    }));
+    setBrokenCoverIds(new Set());
   }
 
   return (
@@ -535,12 +569,14 @@ export default function ShootingPlanPage() {
         </form>
 
         <section className="list-panel">
-          {activePlan && (
+          {activeReferencePlan ? (
             <section className="plan-reference-panel">
               <div className="section-heading">
                 <div>
-                  <h2>参考灵感</h2>
-                  <p className="muted-text">当前计划：{activePlan.title}</p>
+                  <h2>参考灵感管理</h2>
+                  <p className="muted-text">
+                    正在管理这个 Plan 的参考内容：{activeReferencePlan.title}
+                  </p>
                 </div>
                 <button
                   className="text-button"
@@ -562,19 +598,32 @@ export default function ShootingPlanPage() {
                     ) : (
                       <div className="reference-card-list">
                         {linkedInspirations.map((card) => (
-                          <article className="reference-card" key={card.id}>
-                            <strong>{card.title}</strong>
-                            <p>
-                              {platformLabel(card.source_platform)}
-                              {card.author_name ? ` · ${card.author_name}` : ""}
-                            </p>
-                            {card.notes && <p className="note-text">{card.notes}</p>}
-                            <div className="mini-tag-list">
-                              {card.tags.map((tag) => (
-                                <span className="mini-tag" key={tag.id}>
-                                  #{tag.name}
-                                </span>
-                              ))}
+                          <article className="reference-card reference-card--with-cover" key={card.id}>
+                            <InspirationCover
+                              asset={inspirationCoverMap[card.id] ?? null}
+                              isBroken={brokenCoverIds.has(card.id)}
+                              onBroken={() =>
+                                setBrokenCoverIds((current) => {
+                                  const next = new Set(current);
+                                  next.add(card.id);
+                                  return next;
+                                })
+                              }
+                            />
+                            <div className="reference-card-body">
+                              <strong>{card.title}</strong>
+                              <p>
+                                {platformLabel(card.source_platform)}
+                                {card.author_name ? ` · ${card.author_name}` : ""}
+                              </p>
+                              {card.notes && <p className="note-text">{card.notes}</p>}
+                              <div className="mini-tag-list">
+                                {card.tags.map((tag) => (
+                                  <span className="mini-tag" key={tag.id}>
+                                    #{tag.name}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                             <button
                               className="danger-button"
@@ -666,18 +715,32 @@ export default function ShootingPlanPage() {
                   ) : (
                     <div className="reference-card-list">
                       {availableInspirations.map((card) => (
-                        <article className="reference-card" key={card.id}>
-                          <strong>{card.title}</strong>
-                          <p>
-                            {platformLabel(card.source_platform)}
-                            {card.author_name ? ` · ${card.author_name}` : ""}
-                          </p>
-                          <div className="mini-tag-list">
-                            {card.tags.map((tag) => (
-                              <span className="mini-tag" key={tag.id}>
-                                #{tag.name}
-                              </span>
-                            ))}
+                        <article className="reference-card reference-card--with-cover" key={card.id}>
+                          <InspirationCover
+                            asset={inspirationCoverMap[card.id] ?? null}
+                            isBroken={brokenCoverIds.has(card.id)}
+                            onBroken={() =>
+                              setBrokenCoverIds((current) => {
+                                const next = new Set(current);
+                                next.add(card.id);
+                                return next;
+                              })
+                            }
+                          />
+                          <div className="reference-card-body">
+                            <strong>{card.title}</strong>
+                            <p>
+                              {platformLabel(card.source_platform)}
+                              {card.author_name ? ` · ${card.author_name}` : ""}
+                            </p>
+                            {card.notes && <p className="note-text">{card.notes}</p>}
+                            <div className="mini-tag-list">
+                              {card.tags.map((tag) => (
+                                <span className="mini-tag" key={tag.id}>
+                                  #{tag.name}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                           <button
                             type="button"
@@ -691,6 +754,15 @@ export default function ShootingPlanPage() {
                   )}
                 </>
               )}
+            </section>
+          ) : (
+            <section className="plan-reference-panel plan-reference-panel--empty">
+              <div>
+                <h2>参考灵感管理</h2>
+                <p className="muted-text">
+                  请选择一个拍摄计划来管理参考灵感。
+                </p>
+              </div>
             </section>
           )}
 
@@ -769,7 +841,14 @@ export default function ShootingPlanPage() {
           ) : (
             <div className="entity-list">
               {plans.map((plan) => (
-                <article className="entity-card shooting-plan-card" key={plan.id}>
+                <article
+                  className={`entity-card shooting-plan-card ${
+                    activeReferencePlanId === plan.id
+                      ? "shooting-plan-card--active-reference"
+                      : ""
+                  }`}
+                  key={plan.id}
+                >
                   <div className="entity-card-header">
                     <div>
                       <h2>{plan.title}</h2>
@@ -781,6 +860,9 @@ export default function ShootingPlanPage() {
                       {statusLabel(plan.status)}
                     </span>
                   </div>
+                  {activeReferencePlanId === plan.id && (
+                    <p className="active-reference-label">正在管理参考灵感</p>
+                  )}
 
                   <dl className="compact-meta">
                     <div>
@@ -892,6 +974,36 @@ function statusLabel(status: ShootingPlanStatus): string {
 function platformLabel(platform: string): string {
   return (
     sourcePlatforms.find((item) => item.value === platform)?.label ?? "其他"
+  );
+}
+
+function InspirationCover({
+  asset,
+  isBroken,
+  onBroken,
+}: {
+  asset: MediaAsset | null;
+  isBroken: boolean;
+  onBroken: () => void;
+}) {
+  if (!asset || isBroken) {
+    return <div className="reference-cover-placeholder">暂无图片</div>;
+  }
+
+  return (
+    <div className="reference-cover">
+      <img
+        src={getMediaAssetDisplayUrl(asset)}
+        alt={asset.original_filename ?? "参考灵感图片"}
+        onError={(event) => {
+          console.error("plan reference image load failed", {
+            asset,
+            displayUrl: event.currentTarget.src,
+          });
+          onBroken();
+        }}
+      />
+    </div>
   );
 }
 
