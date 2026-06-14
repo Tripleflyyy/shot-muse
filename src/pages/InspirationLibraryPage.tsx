@@ -80,6 +80,10 @@ export default function InspirationLibraryPage() {
     cardId: string;
     asset: MediaAsset;
   } | null>(null);
+  const [imageActionStatus, setImageActionStatus] = useState<{
+    cardId: string;
+    message: string;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [importingCardId, setImportingCardId] = useState<string | null>(null);
@@ -215,6 +219,12 @@ export default function InspirationLibraryPage() {
   }
 
   async function handleAddImage(card: InspirationCard) {
+    console.log("add image clicked", card.id);
+    setImageActionStatus({
+      cardId: card.id,
+      message: "正在打开文件选择器...",
+    });
+
     try {
       const selected = await open({
         multiple: false,
@@ -226,16 +236,38 @@ export default function InspirationLibraryPage() {
         ],
       });
 
-      if (!selected || Array.isArray(selected)) {
+      if (!selected) {
+        setImageActionStatus({
+          cardId: card.id,
+          message: "已取消选择图片",
+        });
+        return;
+      }
+
+      const sourcePath = Array.isArray(selected) ? selected[0] : selected;
+      if (!sourcePath) {
+        setImageActionStatus({
+          cardId: card.id,
+          message: "未选择图片",
+        });
         return;
       }
 
       setImportingCardId(card.id);
-      await importLocalImage(selected, "inspiration", card.id);
+      await importLocalImage(sourcePath, "inspiration", card.id);
       await refreshCardMedia(card.id);
+      setImageActionStatus({
+        cardId: card.id,
+        message: "图片导入成功",
+      });
     } catch (error) {
       console.error("导入图片失败", error);
-      alert(toErrorMessage(error, "导入图片失败"));
+      const message = toErrorMessage(error, "导入图片失败");
+      setImageActionStatus({
+        cardId: card.id,
+        message,
+      });
+      alert(message);
     } finally {
       setImportingCardId(null);
     }
@@ -256,9 +288,18 @@ export default function InspirationLibraryPage() {
       await deleteMediaAsset(asset.id);
       setPendingRemoveMedia(null);
       await refreshCardMedia(cardId);
+      setImageActionStatus({
+        cardId,
+        message: "图片已从灵感卡片移除",
+      });
     } catch (error) {
       console.error("移除图片失败", error);
-      alert(toErrorMessage(error, "移除图片失败"));
+      const message = toErrorMessage(error, "移除图片失败");
+      setImageActionStatus({
+        cardId,
+        message,
+      });
+      alert(message);
     }
   }
 
@@ -541,6 +582,12 @@ export default function InspirationLibraryPage() {
                         {importingCardId === card.id ? "导入中..." : "添加图片"}
                       </button>
                     </div>
+
+                    {imageActionStatus?.cardId === card.id && (
+                      <p className="media-action-status">
+                        {imageActionStatus.message}
+                      </p>
+                    )}
 
                     {(cardMedia[card.id] ?? []).length === 0 ? (
                       <p className="media-empty">暂无图片</p>

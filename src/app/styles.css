@@ -626,6 +626,17 @@ button:disabled {
   font-size: 13px;
 }
 
+.media-action-status {
+  border: 1px solid #eadfcf;
+  border-radius: 8px;
+  margin: 0;
+  padding: 7px 9px;
+  color: #6f5a33;
+  background: #fff7e6;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .media-thumb-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
