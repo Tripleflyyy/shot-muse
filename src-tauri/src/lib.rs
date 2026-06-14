@@ -43,7 +43,13 @@ pub fn app_builder(app_state: AppState) -> tauri::Builder<tauri::Wry> {
             commands::tag_commands::update_tag,
             commands::tag_commands::update_tag_color,
             commands::tag_commands::delete_tag,
-            commands::tag_commands::list_tags_by_usage
+            commands::tag_commands::list_tags_by_usage,
+            commands::shooting_plan_commands::create_shooting_plan,
+            commands::shooting_plan_commands::update_shooting_plan,
+            commands::shooting_plan_commands::delete_shooting_plan,
+            commands::shooting_plan_commands::get_shooting_plan,
+            commands::shooting_plan_commands::list_shooting_plans,
+            commands::shooting_plan_commands::list_shooting_plans_by_project
         ])
 }
 
@@ -86,7 +92,13 @@ pub fn run() {
             commands::tag_commands::update_tag,
             commands::tag_commands::update_tag_color,
             commands::tag_commands::delete_tag,
-            commands::tag_commands::list_tags_by_usage
+            commands::tag_commands::list_tags_by_usage,
+            commands::shooting_plan_commands::create_shooting_plan,
+            commands::shooting_plan_commands::update_shooting_plan,
+            commands::shooting_plan_commands::delete_shooting_plan,
+            commands::shooting_plan_commands::get_shooting_plan,
+            commands::shooting_plan_commands::list_shooting_plans,
+            commands::shooting_plan_commands::list_shooting_plans_by_project
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Shot Muse Tauri application");
