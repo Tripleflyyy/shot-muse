@@ -435,6 +435,10 @@ button:disabled {
   box-sizing: border-box;
 }
 
+.shooting-plan-filter-bar {
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 170px) minmax(120px, 150px);
+}
+
 .search-filter-bar > * {
   min-width: 0;
 }
@@ -513,6 +517,10 @@ button:disabled {
     grid-template-columns: minmax(0, 1fr) minmax(140px, 180px) max-content;
   }
 
+  .shooting-plan-filter-bar {
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 180px) minmax(120px, 150px) max-content;
+  }
+
   .search-filter-actions {
     grid-column: auto;
     flex-wrap: nowrap;
@@ -526,6 +534,56 @@ button:disabled {
 .tag-list {
   display: grid;
   gap: 12px;
+}
+
+.entity-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.entity-card-header > div {
+  min-width: 0;
+}
+
+.status-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid #d8cfc1;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #5e554b;
+  background: #fffefd;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-pill--draft {
+  border-color: #cfc7bb;
+  color: #6f6256;
+  background: #f7efe4;
+}
+
+.status-pill--ready {
+  border-color: #d3a744;
+  color: #7a4c00;
+  background: #fff4ce;
+}
+
+.status-pill--completed {
+  border-color: #79b88a;
+  color: #226238;
+  background: #eaf7ed;
+}
+
+.status-pill--archived {
+  border-color: #b9b1a6;
+  color: #625a51;
+  background: #ece7df;
 }
 
 .entity-card {

@@ -1,27 +1,604 @@
-import PlaceholderCard from "../components/common/PlaceholderCard";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+
+import { listProjects, Project } from "../services/projectApi";
+import {
+  createShootingPlan,
+  deleteShootingPlan,
+  listShootingPlans,
+  ShootingPlan,
+  ShootingPlanPayload,
+  ShootingPlanStatus,
+  updateShootingPlan,
+} from "../services/shootingPlanApi";
+
+type ShootingPlanFormState = {
+  project_id: string;
+  title: string;
+  shooting_theme: string;
+  gear_list: string;
+  scene_list: string;
+  action_list: string;
+  composition_reference: string;
+  lighting_reference: string;
+  post_style: string;
+  technique_notes: string;
+  notes: string;
+  status: ShootingPlanStatus;
+};
+
+type ShootingPlanFilterState = {
+  keyword: string;
+  project_id: string;
+  status: "" | ShootingPlanStatus;
+};
+
+const emptyForm: ShootingPlanFormState = {
+  project_id: "",
+  title: "",
+  shooting_theme: "",
+  gear_list: "",
+  scene_list: "",
+  action_list: "",
+  composition_reference: "",
+  lighting_reference: "",
+  post_style: "",
+  technique_notes: "",
+  notes: "",
+  status: "draft",
+};
+
+const emptyFilters: ShootingPlanFilterState = {
+  keyword: "",
+  project_id: "",
+  status: "",
+};
+
+const statuses: Array<{ value: ShootingPlanStatus; label: string }> = [
+  { value: "draft", label: "草稿" },
+  { value: "ready", label: "准备完成" },
+  { value: "completed", label: "已完成" },
+  { value: "archived", label: "已归档" },
+];
 
 export default function ShootingPlanPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [plans, setPlans] = useState<ShootingPlan[]>([]);
+  const [form, setForm] = useState<ShootingPlanFormState>(emptyForm);
+  const [filters, setFilters] = useState<ShootingPlanFilterState>(emptyFilters);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [pendingDeletePlan, setPendingDeletePlan] =
+    useState<ShootingPlan | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const isEditing = editingPlanId !== null;
+  const submitLabel = useMemo(
+    () => (isEditing ? "保存修改" : "创建拍摄计划"),
+    [isEditing],
+  );
+
+  useEffect(() => {
+    void loadInitialData();
+    // Load once on page mount; filters are applied explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadInitialData() {
+    setIsLoading(true);
+    try {
+      const [projectData, planData] = await Promise.all([
+        listProjects(),
+        listShootingPlans(),
+      ]);
+      setProjects(projectData);
+      setPlans(planData);
+    } catch (error) {
+      alert(toErrorMessage(error, "加载拍摄计划失败"));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function loadPlans(nextFilters = filters) {
+    setIsLoading(true);
+    try {
+      setPlans(
+        await listShootingPlans({
+          keyword: optionalText(nextFilters.keyword),
+          project_id: optionalText(nextFilters.project_id),
+          status: nextFilters.status || null,
+        }),
+      );
+    } catch (error) {
+      alert(toErrorMessage(error, "加载拍摄计划失败"));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!form.project_id.trim()) {
+      alert("关联项目不能为空");
+      return;
+    }
+
+    if (!form.title.trim()) {
+      alert("拍摄计划标题不能为空");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = toPayload(form);
+      if (editingPlanId) {
+        await updateShootingPlan(editingPlanId, payload);
+      } else {
+        await createShootingPlan(payload);
+      }
+
+      resetForm();
+      await loadPlans();
+    } catch (error) {
+      alert(toErrorMessage(error, isEditing ? "编辑拍摄计划失败" : "创建拍摄计划失败"));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function handleEdit(plan: ShootingPlan) {
+    setEditingPlanId(plan.id);
+    setPendingDeletePlan(null);
+    setForm({
+      project_id: plan.project_id,
+      title: plan.title,
+      shooting_theme: plan.shooting_theme ?? "",
+      gear_list: plan.gear_list ?? "",
+      scene_list: plan.scene_list ?? "",
+      action_list: plan.action_list ?? "",
+      composition_reference: plan.composition_reference ?? "",
+      lighting_reference: plan.lighting_reference ?? "",
+      post_style: plan.post_style ?? "",
+      technique_notes: plan.technique_notes ?? "",
+      notes: plan.notes ?? "",
+      status: plan.status,
+    });
+  }
+
+  function requestDeletePlan(plan: ShootingPlan) {
+    setPendingDeletePlan(plan);
+  }
+
+  async function confirmDeletePlan() {
+    if (!pendingDeletePlan) {
+      return;
+    }
+
+    try {
+      await deleteShootingPlan(pendingDeletePlan.id);
+      if (editingPlanId === pendingDeletePlan.id) {
+        resetForm();
+      }
+      setPendingDeletePlan(null);
+      await loadPlans();
+    } catch (error) {
+      console.error("删除拍摄计划失败", error);
+      alert(toErrorMessage(error, "删除拍摄计划失败"));
+    }
+  }
+
+  async function handleFilter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await loadPlans(filters);
+  }
+
+  async function clearFilters() {
+    setFilters(emptyFilters);
+    await loadPlans(emptyFilters);
+  }
+
+  function resetForm() {
+    setEditingPlanId(null);
+    setPendingDeletePlan(null);
+    setForm(emptyForm);
+  }
+
   return (
     <section className="page-frame">
       <header className="page-header">
         <p className="page-kicker">Plans</p>
         <h1 className="page-title">Shooting Plans</h1>
         <p className="page-copy">
-          后续会在这里创建拍摄计划，并关联项目、灵感卡片和拍摄准备信息。
+          为已有摄影项目创建可执行拍摄计划，整理器材、场景、动作、构图、光线和后期方向。
         </p>
       </header>
 
-      <div className="placeholder-grid">
-        <PlaceholderCard title="Plan List">
-          预留拍摄计划列表区域。
-        </PlaceholderCard>
-        <PlaceholderCard title="References">
-          预留关联灵感卡片区域。
-        </PlaceholderCard>
-        <PlaceholderCard title="Export">
-          预留 Markdown 导出入口。
-        </PlaceholderCard>
+      <div className="crud-layout">
+        <form className="form-panel sticky-form-panel" onSubmit={handleSubmit}>
+          <div className="section-heading">
+            <h2>{isEditing ? "编辑拍摄计划" : "新建拍摄计划"}</h2>
+            {isEditing && (
+              <button className="text-button" type="button" onClick={resetForm}>
+                取消编辑
+              </button>
+            )}
+          </div>
+
+          <label className="field">
+            <span>所属项目 *</span>
+            <select
+              value={form.project_id}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  project_id: event.target.value,
+                }))
+              }
+            >
+              <option value="">选择项目</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>标题 *</span>
+            <input
+              value={form.title}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, title: event.target.value }))
+              }
+              placeholder="例如：咖啡馆人像拍摄计划"
+            />
+          </label>
+
+          <label className="field">
+            <span>拍摄主题</span>
+            <textarea
+              value={form.shooting_theme}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  shooting_theme: event.target.value,
+                }))
+              }
+              rows={2}
+            />
+          </label>
+
+          <label className="field">
+            <span>器材清单</span>
+            <textarea
+              value={form.gear_list}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  gear_list: event.target.value,
+                }))
+              }
+              rows={3}
+            />
+          </label>
+
+          <label className="field">
+            <span>场景清单</span>
+            <textarea
+              value={form.scene_list}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  scene_list: event.target.value,
+                }))
+              }
+              rows={3}
+            />
+          </label>
+
+          <label className="field">
+            <span>动作 / 姿态清单</span>
+            <textarea
+              value={form.action_list}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  action_list: event.target.value,
+                }))
+              }
+              rows={3}
+            />
+          </label>
+
+          <label className="field">
+            <span>构图参考</span>
+            <textarea
+              value={form.composition_reference}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  composition_reference: event.target.value,
+                }))
+              }
+              rows={2}
+            />
+          </label>
+
+          <label className="field">
+            <span>光线参考</span>
+            <textarea
+              value={form.lighting_reference}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  lighting_reference: event.target.value,
+                }))
+              }
+              rows={2}
+            />
+          </label>
+
+          <label className="field">
+            <span>后期风格</span>
+            <textarea
+              value={form.post_style}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  post_style: event.target.value,
+                }))
+              }
+              rows={2}
+            />
+          </label>
+
+          <label className="field">
+            <span>技术备注</span>
+            <textarea
+              value={form.technique_notes}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  technique_notes: event.target.value,
+                }))
+              }
+              rows={2}
+            />
+          </label>
+
+          <label className="field">
+            <span>其他备注</span>
+            <textarea
+              value={form.notes}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, notes: event.target.value }))
+              }
+              rows={3}
+            />
+          </label>
+
+          <label className="field">
+            <span>状态</span>
+            <select
+              value={form.status}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  status: event.target.value as ShootingPlanStatus,
+                }))
+              }
+            >
+              {statuses.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button className="primary-button" disabled={isSaving} type="submit">
+            {isSaving ? "保存中..." : submitLabel}
+          </button>
+        </form>
+
+        <section className="list-panel">
+          <form className="search-filter-panel" onSubmit={handleFilter}>
+            <div className="filter-panel-title">
+              <strong>筛选拍摄计划</strong>
+              <span>{plans.length} 个匹配计划</span>
+            </div>
+            <div className="search-filter-bar shooting-plan-filter-bar">
+              <input
+                className="search-filter-input"
+                value={filters.keyword}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    keyword: event.target.value,
+                  }))
+                }
+                placeholder="搜索标题 / 主题 / 器材 / 场景 / 动作 / 备注..."
+              />
+              <select
+                className="search-filter-select"
+                value={filters.project_id}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    project_id: event.target.value,
+                  }))
+                }
+              >
+                <option value="">全部项目</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="search-filter-select"
+                value={filters.status}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    status: event.target.value as "" | ShootingPlanStatus,
+                  }))
+                }
+              >
+                <option value="">全部状态</option>
+                {statuses.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+              <div className="search-filter-actions">
+                <button className="search-filter-button" type="submit">
+                  筛选
+                </button>
+                <button
+                  className="search-filter-reset"
+                  type="button"
+                  onClick={() => void clearFilters()}
+                >
+                  清空
+                </button>
+              </div>
+            </div>
+          </form>
+
+          {isLoading ? (
+            <p className="muted-text">正在加载拍摄计划...</p>
+          ) : plans.length === 0 ? (
+            <p className="empty-message">
+              暂无拍摄计划。先选择项目并创建一个计划吧。
+            </p>
+          ) : (
+            <div className="entity-list">
+              {plans.map((plan) => (
+                <article className="entity-card shooting-plan-card" key={plan.id}>
+                  <div className="entity-card-header">
+                    <div>
+                      <h2>{plan.title}</h2>
+                      <p>
+                        {plan.project_name ?? "未知项目"} · {statusLabel(plan.status)}
+                      </p>
+                    </div>
+                    <span className={`status-pill status-pill--${plan.status}`}>
+                      {statusLabel(plan.status)}
+                    </span>
+                  </div>
+
+                  <dl className="compact-meta">
+                    <div>
+                      <dt>主题</dt>
+                      <dd>{plan.shooting_theme || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>器材</dt>
+                      <dd>{plan.gear_list || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>场景</dt>
+                      <dd>{plan.scene_list || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>动作</dt>
+                      <dd>{plan.action_list || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>构图</dt>
+                      <dd>{plan.composition_reference || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>光线</dt>
+                      <dd>{plan.lighting_reference || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>后期</dt>
+                      <dd>{plan.post_style || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>技术</dt>
+                      <dd>{plan.technique_notes || "-"}</dd>
+                    </div>
+                  </dl>
+
+                  {plan.notes && <p className="note-text">{plan.notes}</p>}
+
+                  <div className="row-actions">
+                    <button type="button" onClick={() => handleEdit(plan)}>
+                      编辑
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() => requestDeletePlan(plan)}
+                    >
+                      删除
+                    </button>
+                  </div>
+
+                  {pendingDeletePlan?.id === plan.id && (
+                    <div className="inline-confirm">
+                      <p>确定删除拍摄计划「{plan.title}」吗？</p>
+                      <div className="row-actions">
+                        <button
+                          className="danger-button"
+                          type="button"
+                          onClick={() => void confirmDeletePlan()}
+                        >
+                          确认删除
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeletePlan(null)}
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </section>
   );
+}
+
+function toPayload(form: ShootingPlanFormState): ShootingPlanPayload {
+  return {
+    project_id: form.project_id,
+    title: form.title,
+    shooting_theme: optionalText(form.shooting_theme),
+    gear_list: optionalText(form.gear_list),
+    scene_list: optionalText(form.scene_list),
+    action_list: optionalText(form.action_list),
+    composition_reference: optionalText(form.composition_reference),
+    lighting_reference: optionalText(form.lighting_reference),
+    post_style: optionalText(form.post_style),
+    technique_notes: optionalText(form.technique_notes),
+    notes: optionalText(form.notes),
+    status: form.status,
+  };
+}
+
+function statusLabel(status: ShootingPlanStatus): string {
+  return statuses.find((item) => item.value === status)?.label ?? "草稿";
+}
+
+function optionalText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message ? `${fallback}：${message}` : fallback;
 }
