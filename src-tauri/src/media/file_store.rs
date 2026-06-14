@@ -32,6 +32,10 @@ pub fn copy_local_image(
     let target_path = unique_target_path(&target_dir, extension);
     fs::copy(source_path, &target_path).map_err(|error| format!("复制图片失败：{error}"))?;
 
+    if !target_path.exists() {
+        return Err("图片复制失败：目标文件不存在".to_string());
+    }
+
     let metadata =
         fs::metadata(&target_path).map_err(|error| format!("读取图片信息失败：{error}"))?;
 

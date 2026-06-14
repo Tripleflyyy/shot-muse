@@ -655,18 +655,42 @@ button:disabled {
   background: #ffffff;
 }
 
+.media-thumb-image-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #f2ede5;
+}
+
 .media-thumb-item img {
   display: block;
   width: 100%;
   max-width: 100%;
   aspect-ratio: 4 / 3;
-  border-radius: 6px;
   object-fit: cover;
-  background: #f2ede5;
+  background: transparent;
 }
 
 .media-thumb-item img.is-broken {
-  opacity: 0.24;
+  opacity: 0;
+}
+
+.media-load-fallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  color: #8a7660;
+  background: #f7efe2;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.media-thumb-image-wrap.is-broken .media-load-fallback {
+  display: flex;
 }
 
 .media-thumb-meta {

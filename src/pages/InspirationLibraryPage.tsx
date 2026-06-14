@@ -593,51 +593,70 @@ export default function InspirationLibraryPage() {
                       <p className="media-empty">暂无图片</p>
                     ) : (
                       <div className="media-thumb-grid">
-                        {(cardMedia[card.id] ?? []).map((asset) => (
-                          <div className="media-thumb-item" key={asset.id}>
-                            <img
-                              alt={asset.original_filename ?? "灵感图片"}
-                              src={getMediaAssetDisplayUrl(asset)}
-                              onError={(event) => {
-                                event.currentTarget.classList.add("is-broken");
-                              }}
-                            />
-                            <div className="media-thumb-meta">
-                              <span>{asset.original_filename ?? "本地图片"}</span>
-                              <button
-                                className="text-button"
-                                type="button"
-                                onClick={() => requestRemoveMedia(card.id, asset)}
-                              >
-                                移除
-                              </button>
-                            </div>
+                        {(cardMedia[card.id] ?? []).map((asset) => {
+                          const displayUrl = getMediaAssetDisplayUrl(asset);
+                          console.log("media asset path", asset.file_path);
+                          console.log("media asset display url", displayUrl);
 
-                            {pendingRemoveMedia?.asset.id === asset.id && (
-                              <div className="inline-confirm">
-                                <p>
-                                  确定从灵感卡片中移除图片「
-                                  {asset.original_filename ?? "本地图片"}」吗？
-                                </p>
-                                <div className="row-actions">
-                                  <button
-                                    className="danger-button"
-                                    type="button"
-                                    onClick={() => void confirmRemoveMedia()}
-                                  >
-                                    确认移除
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setPendingRemoveMedia(null)}
-                                  >
-                                    取消
-                                  </button>
-                                </div>
+                          return (
+                            <div className="media-thumb-item" key={asset.id}>
+                              <div className="media-thumb-image-wrap">
+                                <img
+                                  alt={asset.original_filename ?? "灵感图片"}
+                                  src={displayUrl}
+                                  onError={(event) => {
+                                    console.error("image load failed", {
+                                      filePath: asset.file_path,
+                                      displayUrl,
+                                      asset,
+                                    });
+                                    event.currentTarget.classList.add("is-broken");
+                                    event.currentTarget
+                                      .closest(".media-thumb-image-wrap")
+                                      ?.classList.add("is-broken");
+                                  }}
+                                />
+                                <span className="media-load-fallback">
+                                  图片加载失败
+                                </span>
                               </div>
-                            )}
-                          </div>
-                        ))}
+                              <div className="media-thumb-meta">
+                                <span>{asset.original_filename ?? "本地图片"}</span>
+                                <button
+                                  className="text-button"
+                                  type="button"
+                                  onClick={() => requestRemoveMedia(card.id, asset)}
+                                >
+                                  移除
+                                </button>
+                              </div>
+
+                              {pendingRemoveMedia?.asset.id === asset.id && (
+                                <div className="inline-confirm">
+                                  <p>
+                                    确定从灵感卡片中移除图片「
+                                    {asset.original_filename ?? "本地图片"}」吗？
+                                  </p>
+                                  <div className="row-actions">
+                                    <button
+                                      className="danger-button"
+                                      type="button"
+                                      onClick={() => void confirmRemoveMedia()}
+                                    >
+                                      确认移除
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingRemoveMedia(null)}
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

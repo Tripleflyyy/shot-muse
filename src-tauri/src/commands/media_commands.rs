@@ -337,6 +337,10 @@ mod tests {
         assert_eq!(imported.mime_type.as_deref(), Some("image/jpeg"));
         assert_eq!(imported.source_type, "file_picker");
         assert!(Path::new(&imported.file_path).exists());
+        assert_ne!(imported.file_path, source_path.to_string_lossy());
+        assert!(imported
+            .file_path
+            .contains(&format!("media/inspiration/{inspiration_id}")));
 
         let linked = state
             .with_connection(|connection| {
