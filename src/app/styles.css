@@ -586,6 +586,134 @@ button:disabled {
   padding-left: 10px;
 }
 
+.media-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid #ebe3d6;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fffdf9;
+}
+
+.media-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.media-section-header strong {
+  color: #2f2a25;
+  font-size: 13px;
+}
+
+.media-section-header button {
+  flex: 0 0 auto;
+  border: 1px solid #cfc7bb;
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: #2f2a25;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.media-empty {
+  margin: 0;
+  color: #8a7f73;
+  font-size: 13px;
+}
+
+.media-action-status {
+  border: 1px solid #eadfcf;
+  border-radius: 8px;
+  margin: 0;
+  padding: 7px 9px;
+  color: #6f5a33;
+  background: #fff7e6;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.media-thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.media-thumb-item {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  border: 1px solid #eee5d8;
+  border-radius: 8px;
+  padding: 7px;
+  background: #ffffff;
+}
+
+.media-thumb-image-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #f2ede5;
+}
+
+.media-thumb-item img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: transparent;
+}
+
+.media-thumb-item img.is-broken {
+  opacity: 0;
+}
+
+.media-load-fallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  color: #8a7660;
+  background: #f7efe2;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.media-thumb-image-wrap.is-broken .media-load-fallback {
+  display: flex;
+}
+
+.media-thumb-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.media-thumb-meta span {
+  min-width: 0;
+  overflow: hidden;
+  color: #6b635a;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-thumb-meta button {
+  flex: 0 0 auto;
+}
+
 .platform-pill {
   flex: 0 0 auto;
   border: 1px solid #d6d0c7;

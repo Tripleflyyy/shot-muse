@@ -8,6 +8,7 @@ use crate::db;
 use crate::models::AppStatus;
 
 pub struct AppState {
+    app_data_dir: PathBuf,
     database_path: PathBuf,
     connection: Mutex<Connection>,
     database_initialized: bool,
@@ -15,11 +16,13 @@ pub struct AppState {
 
 impl AppState {
     pub fn initialize(app_data_dir: impl AsRef<Path>) -> rusqlite::Result<Self> {
-        initialize_app_data_dirs(app_data_dir.as_ref())?;
-        let database_path = db::initialize_database(app_data_dir)?;
+        let app_data_dir = app_data_dir.as_ref().to_path_buf();
+        initialize_app_data_dirs(&app_data_dir)?;
+        let database_path = db::initialize_database(&app_data_dir)?;
         let connection = db::connect(&database_path)?;
 
         Ok(Self {
+            app_data_dir,
             database_path,
             connection: Mutex::new(connection),
             database_initialized: true,
@@ -51,6 +54,10 @@ impl AppState {
 
     pub fn database_path(&self) -> &Path {
         &self.database_path
+    }
+
+    pub fn app_data_dir(&self) -> &Path {
+        &self.app_data_dir
     }
 
     pub fn with_connection<T>(

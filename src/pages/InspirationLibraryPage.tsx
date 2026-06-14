@@ -1,4 +1,5 @@
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 
 import {
   createInspirationCard,
@@ -9,6 +10,13 @@ import {
   SourcePlatform,
   updateInspirationCard,
 } from "../services/inspirationApi";
+import {
+  deleteMediaAsset,
+  getMediaAssetDisplayUrl,
+  importLocalImage,
+  listMediaAssetsByTarget,
+  MediaAsset,
+} from "../services/mediaApi";
 import { listTags, Tag, TagCategory } from "../services/tagApi";
 
 type InspirationFormState = {
@@ -67,8 +75,18 @@ export default function InspirationLibraryPage() {
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [pendingDeleteCard, setPendingDeleteCard] =
     useState<InspirationCard | null>(null);
+  const [cardMedia, setCardMedia] = useState<Record<string, MediaAsset[]>>({});
+  const [pendingRemoveMedia, setPendingRemoveMedia] = useState<{
+    cardId: string;
+    asset: MediaAsset;
+  } | null>(null);
+  const [imageActionStatus, setImageActionStatus] = useState<{
+    cardId: string;
+    message: string;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [importingCardId, setImportingCardId] = useState<string | null>(null);
 
   const isEditing = editingCardId !== null;
   const selectableTags = useMemo(() => {
@@ -102,11 +120,37 @@ export default function InspirationLibraryPage() {
         tag_ids: [],
       });
       setCards(data);
+      await loadMediaForCards(data);
     } catch (error) {
       alert(toErrorMessage(error, "加载灵感卡片失败"));
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function loadMediaForCards(nextCards: InspirationCard[]) {
+    if (nextCards.length === 0) {
+      setCardMedia({});
+      return;
+    }
+
+    try {
+      const entries = await Promise.all(
+        nextCards.map(async (card) => [
+          card.id,
+          await listMediaAssetsByTarget("inspiration", card.id),
+        ] as const),
+      );
+      setCardMedia(Object.fromEntries(entries));
+    } catch (error) {
+      console.error("加载灵感图片失败", error);
+      alert(toErrorMessage(error, "加载灵感图片失败"));
+    }
+  }
+
+  async function refreshCardMedia(cardId: string) {
+    const media = await listMediaAssetsByTarget("inspiration", cardId);
+    setCardMedia((current) => ({ ...current, [cardId]: media }));
   }
 
   useEffect(() => {
@@ -174,6 +218,91 @@ export default function InspirationLibraryPage() {
     setPendingDeleteCard(card);
   }
 
+  async function handleAddImage(card: InspirationCard) {
+    console.log("add image clicked", card.id);
+    setImageActionStatus({
+      cardId: card.id,
+      message: "正在打开文件选择器...",
+    });
+
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "图片",
+            extensions: ["jpg", "jpeg", "png", "webp"],
+          },
+        ],
+      });
+
+      if (!selected) {
+        setImageActionStatus({
+          cardId: card.id,
+          message: "已取消选择图片",
+        });
+        return;
+      }
+
+      const sourcePath = Array.isArray(selected) ? selected[0] : selected;
+      if (!sourcePath) {
+        setImageActionStatus({
+          cardId: card.id,
+          message: "未选择图片",
+        });
+        return;
+      }
+
+      setImportingCardId(card.id);
+      await importLocalImage(sourcePath, "inspiration", card.id);
+      await refreshCardMedia(card.id);
+      setImageActionStatus({
+        cardId: card.id,
+        message: "图片导入成功",
+      });
+    } catch (error) {
+      console.error("导入图片失败", error);
+      const message = toErrorMessage(error, "导入图片失败");
+      setImageActionStatus({
+        cardId: card.id,
+        message,
+      });
+      alert(message);
+    } finally {
+      setImportingCardId(null);
+    }
+  }
+
+  function requestRemoveMedia(cardId: string, asset: MediaAsset) {
+    setPendingRemoveMedia({ cardId, asset });
+  }
+
+  async function confirmRemoveMedia() {
+    if (!pendingRemoveMedia) {
+      return;
+    }
+
+    const { cardId, asset } = pendingRemoveMedia;
+
+    try {
+      await deleteMediaAsset(asset.id);
+      setPendingRemoveMedia(null);
+      await refreshCardMedia(cardId);
+      setImageActionStatus({
+        cardId,
+        message: "图片已从灵感卡片移除",
+      });
+    } catch (error) {
+      console.error("移除图片失败", error);
+      const message = toErrorMessage(error, "移除图片失败");
+      setImageActionStatus({
+        cardId,
+        message,
+      });
+      alert(message);
+    }
+  }
+
   async function confirmDeleteCard() {
     if (!pendingDeleteCard?.id) {
       alert("删除灵感卡片失败：灵感卡片 ID 为空");
@@ -188,6 +317,9 @@ export default function InspirationLibraryPage() {
         resetForm();
       }
       setPendingDeleteCard(null);
+      setPendingRemoveMedia((current) =>
+        current?.cardId === card.id ? null : current,
+      );
       await loadCards();
     } catch (error) {
       console.error("删除灵感卡片失败", error);
@@ -438,6 +570,96 @@ export default function InspirationLibraryPage() {
                   </dl>
 
                   {card.notes && <p className="note-text">{card.notes}</p>}
+
+                  <div className="media-section">
+                    <div className="media-section-header">
+                      <strong>图片</strong>
+                      <button
+                        type="button"
+                        onClick={() => void handleAddImage(card)}
+                        disabled={importingCardId === card.id}
+                      >
+                        {importingCardId === card.id ? "导入中..." : "添加图片"}
+                      </button>
+                    </div>
+
+                    {imageActionStatus?.cardId === card.id && (
+                      <p className="media-action-status">
+                        {imageActionStatus.message}
+                      </p>
+                    )}
+
+                    {(cardMedia[card.id] ?? []).length === 0 ? (
+                      <p className="media-empty">暂无图片</p>
+                    ) : (
+                      <div className="media-thumb-grid">
+                        {(cardMedia[card.id] ?? []).map((asset) => {
+                          const displayUrl = getMediaAssetDisplayUrl(asset);
+                          console.log("media asset path", asset.file_path);
+                          console.log("media asset display url", displayUrl);
+
+                          return (
+                            <div className="media-thumb-item" key={asset.id}>
+                              <div className="media-thumb-image-wrap">
+                                <img
+                                  alt={asset.original_filename ?? "灵感图片"}
+                                  src={displayUrl}
+                                  onError={(event) => {
+                                    console.error("image load failed", {
+                                      filePath: asset.file_path,
+                                      displayUrl,
+                                      asset,
+                                    });
+                                    event.currentTarget.classList.add("is-broken");
+                                    event.currentTarget
+                                      .closest(".media-thumb-image-wrap")
+                                      ?.classList.add("is-broken");
+                                  }}
+                                />
+                                <span className="media-load-fallback">
+                                  图片加载失败
+                                </span>
+                              </div>
+                              <div className="media-thumb-meta">
+                                <span>{asset.original_filename ?? "本地图片"}</span>
+                                <button
+                                  className="text-button"
+                                  type="button"
+                                  onClick={() => requestRemoveMedia(card.id, asset)}
+                                >
+                                  移除
+                                </button>
+                              </div>
+
+                              {pendingRemoveMedia?.asset.id === asset.id && (
+                                <div className="inline-confirm">
+                                  <p>
+                                    确定从灵感卡片中移除图片「
+                                    {asset.original_filename ?? "本地图片"}」吗？
+                                  </p>
+                                  <div className="row-actions">
+                                    <button
+                                      className="danger-button"
+                                      type="button"
+                                      onClick={() => void confirmRemoveMedia()}
+                                    >
+                                      确认移除
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingRemoveMedia(null)}
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="tag-chip-list">
                     {card.tags.length === 0 ? (

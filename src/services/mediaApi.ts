@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 export type MediaTargetType = "inspiration" | "technique" | "project" | "plan";
 export type MediaSourceType = "file_picker" | "clipboard" | "drag_drop";
@@ -84,4 +84,20 @@ export async function deleteMediaAsset(id: string): Promise<boolean> {
     throw new Error("未找到要删除的媒体资源");
   }
   return deleted;
+}
+
+export async function importLocalImage(
+  sourcePath: string,
+  targetType: MediaTargetType,
+  targetId: string,
+): Promise<MediaAsset> {
+  return invoke<MediaAsset>("import_local_image", {
+    sourcePath,
+    targetType,
+    targetId,
+  });
+}
+
+export function getMediaAssetDisplayUrl(asset: MediaAsset): string {
+  return convertFileSrc(asset.file_path);
 }

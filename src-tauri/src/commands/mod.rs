@@ -12,7 +12,7 @@ pub use inspiration_commands::{
     update_inspiration_card,
 };
 pub use media_commands::{
-    create_media_asset, delete_media_asset, get_media_asset, list_media_assets,
+    create_media_asset, delete_media_asset, get_media_asset, import_local_image, list_media_assets,
     list_media_assets_by_target, update_media_asset_target,
 };
 pub use project_commands::{
