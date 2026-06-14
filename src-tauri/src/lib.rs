@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod db;
+pub mod media;
 pub mod models;
 pub mod repositories;
 pub mod state;
@@ -10,6 +11,7 @@ use tauri::Manager;
 
 pub fn app_builder(app_state: AppState) -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::app_commands::get_app_status,
@@ -35,6 +37,7 @@ pub fn app_builder(app_state: AppState) -> tauri::Builder<tauri::Wry> {
             commands::media_commands::list_media_assets_by_target,
             commands::media_commands::update_media_asset_target,
             commands::media_commands::delete_media_asset,
+            commands::media_commands::import_local_image,
             commands::tag_commands::list_tags,
             commands::tag_commands::create_custom_tag,
             commands::tag_commands::update_tag,
@@ -46,6 +49,7 @@ pub fn app_builder(app_state: AppState) -> tauri::Builder<tauri::Wry> {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
             let app_state = AppState::initialize(&app_data_dir)?;
@@ -76,6 +80,7 @@ pub fn run() {
             commands::media_commands::list_media_assets_by_target,
             commands::media_commands::update_media_asset_target,
             commands::media_commands::delete_media_asset,
+            commands::media_commands::import_local_image,
             commands::tag_commands::list_tags,
             commands::tag_commands::create_custom_tag,
             commands::tag_commands::update_tag,
