@@ -619,6 +619,43 @@ button:disabled {
   background: #ece7df;
 }
 
+.status-select {
+  flex: 0 0 auto;
+  min-width: 106px;
+  border: 1px solid #d8cfc1;
+  border-radius: 999px;
+  padding: 7px 28px 7px 11px;
+  color: #5e554b;
+  background: #fffefd;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-select--draft {
+  border-color: #cfc7bb;
+  color: #6f6256;
+  background-color: #f7efe4;
+}
+
+.status-select--ready {
+  border-color: #d3a744;
+  color: #7a4c00;
+  background-color: #fff4ce;
+}
+
+.status-select--completed {
+  border-color: #79b88a;
+  color: #226238;
+  background-color: #eaf7ed;
+}
+
+.status-select--archived {
+  border-color: #b9b1a6;
+  color: #625a51;
+  background-color: #ece7df;
+}
+
 .entity-card {
   padding: 15px;
 }
@@ -1806,6 +1843,15 @@ button:disabled {
   min-width: 0;
 }
 
+.modal-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .reference-modal-close {
   flex: 0 0 auto;
   border: 1px solid #d8cfc0;
@@ -2208,6 +2254,10 @@ button:disabled {
   .reference-modal-header {
     flex-direction: column;
     padding: 16px;
+  }
+
+  .modal-header-actions {
+    justify-content: flex-start;
   }
 
   .reference-modal-body {

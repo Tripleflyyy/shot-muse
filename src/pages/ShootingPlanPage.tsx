@@ -126,6 +126,7 @@ export default function ShootingPlanPage() {
   const [isPlanFormModalOpen, setIsPlanFormModalOpen] = useState(false);
   const [selectedPlanImagePath, setSelectedPlanImagePath] = useState("");
   const [selectedPlanImageName, setSelectedPlanImageName] = useState("");
+  const [existingPlanImage, setExistingPlanImage] = useState<MediaAsset | null>(null);
   const [setSelectedPlanImageAsCover, setSetSelectedPlanImageAsCover] =
     useState(true);
   const [planImageStatus, setPlanImageStatus] = useState("");
@@ -277,6 +278,7 @@ export default function ShootingPlanPage() {
     setIsPlanDetailEditing(true);
     setPendingDeletePlan(null);
     clearSelectedPlanImage();
+    void loadExistingPlanImage(plan);
     setForm({
       project_id: plan.project_id,
       title: plan.title,
@@ -291,6 +293,27 @@ export default function ShootingPlanPage() {
       notes: plan.notes ?? "",
       status: plan.status,
     });
+  }
+
+  async function loadExistingPlanImage(plan: ShootingPlan) {
+    setExistingPlanImage(null);
+
+    try {
+      if (plan.cover_media_asset_id) {
+        const cover = await getMediaAsset(plan.cover_media_asset_id);
+        setExistingPlanImage(cover);
+        setSetSelectedPlanImageAsCover(true);
+        return;
+      }
+
+      const planMedia = await listMediaAssetsByTarget("shooting_plan", plan.id);
+      const existing = planMedia[0] ?? null;
+      setExistingPlanImage(existing);
+      setSetSelectedPlanImageAsCover(false);
+    } catch (error) {
+      console.error("加载 Plan 参考图失败", { planId: plan.id, error });
+      setExistingPlanImage(null);
+    }
   }
 
   function requestDeletePlan(plan: ShootingPlan) {
@@ -349,7 +372,15 @@ export default function ShootingPlanPage() {
   function clearSelectedPlanImage() {
     setSelectedPlanImagePath("");
     setSelectedPlanImageName("");
+    setExistingPlanImage(null);
     setSetSelectedPlanImageAsCover(true);
+    setPlanImageStatus("");
+  }
+
+  function clearPlanImageSelection() {
+    setSelectedPlanImagePath("");
+    setSelectedPlanImageName("");
+    setExistingPlanImage(null);
     setPlanImageStatus("");
   }
 
@@ -393,6 +424,7 @@ export default function ShootingPlanPage() {
     if (editingPlanId) {
       resetForm();
     }
+    clearSelectedPlanImage();
   }
 
   async function confirmDeletePlan() {
@@ -779,52 +811,75 @@ export default function ShootingPlanPage() {
           />
         </label>
 
-        <label className="field">
-          <span>状态</span>
-          <select
-            value={form.status}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                status: event.target.value as ShootingPlanStatus,
-              }))
-            }
-          >
-            {statuses.map((status) => (
-              <option key={status.value} value={status.value}>
-                {status.label}
-              </option>
-            ))}
-          </select>
-        </label>
       </>
     );
   }
 
+  function renderStatusSelect() {
+    return (
+      <select
+        className={`status-select status-select--${form.status}`}
+        value={form.status}
+        onChange={(event) =>
+          setForm((current) => ({
+            ...current,
+            status: event.target.value as ShootingPlanStatus,
+          }))
+        }
+      >
+        {statuses.map((status) => (
+          <option key={status.value} value={status.value}>
+            {status.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   function renderPlanImagePicker() {
+    const hasSelectedImage = Boolean(selectedPlanImagePath);
+    const previewAsset = hasSelectedImage ? null : existingPlanImage;
+    const hasAnyImage = hasSelectedImage || Boolean(previewAsset);
+    const previewName = hasSelectedImage
+      ? selectedPlanImageName
+      : previewAsset?.original_filename ?? "当前封面图";
+
     return (
       <section className="plan-image-picker">
         <div className="plan-image-picker-header">
           <strong>Plan 参考图</strong>
           <button type="button" onClick={() => void choosePlanImage()}>
-            {selectedPlanImagePath ? "更换图片" : "选择图片"}
+            {hasAnyImage ? "更换图片" : "选择图片"}
           </button>
         </div>
 
-        {selectedPlanImagePath && (
+        {hasAnyImage && (
           <div className="plan-image-preview">
-            <img
-              src={convertFileSrc(selectedPlanImagePath)}
-              alt={selectedPlanImageName || "Plan 参考图"}
-              onError={(event) => {
-                console.error("plan selected image preview failed", {
-                  sourcePath: selectedPlanImagePath,
-                  displayUrl: event.currentTarget.src,
-                });
-              }}
-            />
+            {hasSelectedImage ? (
+              <img
+                src={convertFileSrc(selectedPlanImagePath)}
+                alt={selectedPlanImageName || "Plan 参考图"}
+                onError={(event) => {
+                  console.error("plan selected image preview failed", {
+                    sourcePath: selectedPlanImagePath,
+                    displayUrl: event.currentTarget.src,
+                  });
+                }}
+              />
+            ) : previewAsset ? (
+              <img
+                src={getMediaAssetDisplayUrl(previewAsset)}
+                alt={previewAsset.original_filename ?? "当前封面图"}
+                onError={(event) => {
+                  console.error("existing plan image preview failed", {
+                    asset: previewAsset,
+                    displayUrl: event.currentTarget.src,
+                  });
+                }}
+              />
+            ) : null}
             <div>
-              <strong>{selectedPlanImageName || "已选择图片"}</strong>
+              <strong>{previewName || "已选择图片"}</strong>
               <label className="check-row">
                 <input
                   checked={setSelectedPlanImageAsCover}
@@ -835,7 +890,7 @@ export default function ShootingPlanPage() {
                 />
                 <span>设为 Plan 封面</span>
               </label>
-              <button type="button" onClick={clearSelectedPlanImage}>
+              <button type="button" onClick={clearPlanImageSelection}>
                 取消选择
               </button>
             </div>
@@ -1029,13 +1084,16 @@ export default function ShootingPlanPage() {
                 <h2 id="plan-form-modal-title">新建 Plan</h2>
                 <p className="muted-text">先保存 Plan，再在详情窗口中添加参考灵感。</p>
               </div>
-              <button
-                className="reference-modal-close"
-                type="button"
-                onClick={closeNewPlanModal}
-              >
-                关闭
-              </button>
+              <div className="modal-header-actions">
+                {renderStatusSelect()}
+                <button
+                  className="reference-modal-close"
+                  type="button"
+                  onClick={closeNewPlanModal}
+                >
+                  关闭
+                </button>
+              </div>
             </header>
             <form className="plan-modal-body" onSubmit={handleSubmit}>
               {renderPlanFormFields()}
@@ -1060,18 +1118,24 @@ export default function ShootingPlanPage() {
               <div>
                 <p className="page-kicker">Plan Detail</p>
                 <h2 id="plan-detail-modal-title">{selectedPlanForDetail.title}</h2>
-                <p className="muted-text">
-                  {selectedPlanForDetail.project_name ?? "未知项目"} ·{" "}
-                  {statusLabel(selectedPlanForDetail.status)}
-                </p>
+                <p className="muted-text">{selectedPlanForDetail.project_name ?? "未知项目"}</p>
               </div>
-              <button
-                className="reference-modal-close"
-                type="button"
-                onClick={closePlanDetail}
-              >
-                关闭
-              </button>
+              <div className="modal-header-actions">
+                {isPlanDetailEditing ? (
+                  renderStatusSelect()
+                ) : (
+                  <span className={`status-pill status-pill--${selectedPlanForDetail.status}`}>
+                    {statusLabel(selectedPlanForDetail.status)}
+                  </span>
+                )}
+                <button
+                  className="reference-modal-close"
+                  type="button"
+                  onClick={closePlanDetail}
+                >
+                  关闭
+                </button>
+              </div>
             </header>
 
             <div className="plan-modal-body">
@@ -1088,6 +1152,7 @@ export default function ShootingPlanPage() {
                       onClick={() => {
                         setIsPlanDetailEditing(false);
                         resetForm();
+                        clearSelectedPlanImage();
                       }}
                     >
                       取消编辑
