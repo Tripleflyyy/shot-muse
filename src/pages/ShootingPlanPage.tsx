@@ -105,6 +105,7 @@ export default function ShootingPlanPage() {
   const [brokenCoverIds, setBrokenCoverIds] = useState<Set<string>>(new Set());
   const [inspirationFilters, setInspirationFilters] =
     useState<PlanInspirationFilterState>(emptyInspirationFilters);
+  const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [pendingDeletePlan, setPendingDeletePlan] =
     useState<ShootingPlan | null>(null);
@@ -255,6 +256,7 @@ export default function ShootingPlanPage() {
   }
 
   function clearReferenceState() {
+    setIsReferenceModalOpen(false);
     setActiveReferencePlanId(null);
     setLinkedInspirations([]);
     setAvailableInspirations([]);
@@ -266,8 +268,14 @@ export default function ShootingPlanPage() {
 
   function managePlanInspirations(plan: ShootingPlan) {
     setActiveReferencePlanId(plan.id);
+    setIsReferenceModalOpen(true);
     setPendingDetachInspiration(null);
     void loadPlanReferences(plan.id, inspirationFilters);
+  }
+
+  function closeReferenceModal() {
+    setIsReferenceModalOpen(false);
+    setPendingDetachInspiration(null);
   }
 
   async function loadPlanReferences(
@@ -367,6 +375,14 @@ export default function ShootingPlanPage() {
       ...Object.fromEntries(entries),
     }));
     setBrokenCoverIds(new Set());
+  }
+
+  function markCoverBroken(cardId: string) {
+    setBrokenCoverIds((current) => {
+      const next = new Set(current);
+      next.add(cardId);
+      return next;
+    });
   }
 
   return (
@@ -569,203 +585,6 @@ export default function ShootingPlanPage() {
         </form>
 
         <section className="list-panel">
-          {activeReferencePlan ? (
-            <section className="plan-reference-panel">
-              <div className="section-heading">
-                <div>
-                  <h2>参考灵感管理</h2>
-                  <p className="muted-text">
-                    正在管理这个 Plan 的参考内容：{activeReferencePlan.title}
-                  </p>
-                </div>
-                <button
-                  className="text-button"
-                  type="button"
-                  onClick={clearReferenceState}
-                >
-                  关闭
-                </button>
-              </div>
-
-              {isReferenceLoading ? (
-                <p className="muted-text">正在加载参考灵感...</p>
-              ) : (
-                <>
-                  <div className="reference-subsection">
-                    <h3>已加入该计划</h3>
-                    {linkedInspirations.length === 0 ? (
-                      <p className="empty-message">还没有为该计划选择参考灵感。</p>
-                    ) : (
-                      <div className="reference-card-list">
-                        {linkedInspirations.map((card) => (
-                          <article className="reference-card reference-card--with-cover" key={card.id}>
-                            <InspirationCover
-                              asset={inspirationCoverMap[card.id] ?? null}
-                              isBroken={brokenCoverIds.has(card.id)}
-                              onBroken={() =>
-                                setBrokenCoverIds((current) => {
-                                  const next = new Set(current);
-                                  next.add(card.id);
-                                  return next;
-                                })
-                              }
-                            />
-                            <div className="reference-card-body">
-                              <strong>{card.title}</strong>
-                              <p>
-                                {platformLabel(card.source_platform)}
-                                {card.author_name ? ` · ${card.author_name}` : ""}
-                              </p>
-                              {card.notes && <p className="note-text">{card.notes}</p>}
-                              <div className="mini-tag-list">
-                                {card.tags.map((tag) => (
-                                  <span className="mini-tag" key={tag.id}>
-                                    #{tag.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <button
-                              className="danger-button"
-                              type="button"
-                              onClick={() => requestDetachInspiration(card)}
-                            >
-                              从计划移除
-                            </button>
-                            {pendingDetachInspiration?.id === card.id && (
-                              <div className="inline-confirm">
-                                <p>确定从计划中移除「{card.title}」吗？</p>
-                                <div className="row-actions">
-                                  <button
-                                    className="danger-button"
-                                    type="button"
-                                    onClick={() => void confirmDetachInspiration()}
-                                  >
-                                    确认移除
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setPendingDetachInspiration(null)}
-                                  >
-                                    取消
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <form
-                    className="search-filter-panel reference-search-panel"
-                    onSubmit={handleInspirationFilter}
-                  >
-                    <div className="filter-panel-title">
-                      <strong>从灵感库添加</strong>
-                      <span>{availableInspirations.length} 个可加入灵感</span>
-                    </div>
-                    <div className="search-filter-bar">
-                      <input
-                        className="search-filter-input"
-                        value={inspirationFilters.keyword}
-                        onChange={(event) =>
-                          setInspirationFilters((current) => ({
-                            ...current,
-                            keyword: event.target.value,
-                          }))
-                        }
-                        placeholder="搜索标题 / 作者 / 备注 / 链接 / 标签..."
-                      />
-                      <select
-                        className="search-filter-select"
-                        value={inspirationFilters.source_platform}
-                        onChange={(event) =>
-                          setInspirationFilters((current) => ({
-                            ...current,
-                            source_platform: event.target.value as "" | SourcePlatform,
-                          }))
-                        }
-                      >
-                        <option value="">全部平台</option>
-                        {sourcePlatforms.map((platform) => (
-                          <option key={platform.value} value={platform.value}>
-                            {platform.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="search-filter-actions">
-                        <button className="search-filter-button" type="submit">
-                          筛选
-                        </button>
-                        <button
-                          className="search-filter-reset"
-                          type="button"
-                          onClick={() => void clearInspirationFilters()}
-                        >
-                          清空
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-
-                  {availableInspirations.length === 0 ? (
-                    <p className="empty-message">没有匹配的可加入灵感。</p>
-                  ) : (
-                    <div className="reference-card-list">
-                      {availableInspirations.map((card) => (
-                        <article className="reference-card reference-card--with-cover" key={card.id}>
-                          <InspirationCover
-                            asset={inspirationCoverMap[card.id] ?? null}
-                            isBroken={brokenCoverIds.has(card.id)}
-                            onBroken={() =>
-                              setBrokenCoverIds((current) => {
-                                const next = new Set(current);
-                                next.add(card.id);
-                                return next;
-                              })
-                            }
-                          />
-                          <div className="reference-card-body">
-                            <strong>{card.title}</strong>
-                            <p>
-                              {platformLabel(card.source_platform)}
-                              {card.author_name ? ` · ${card.author_name}` : ""}
-                            </p>
-                            {card.notes && <p className="note-text">{card.notes}</p>}
-                            <div className="mini-tag-list">
-                              {card.tags.map((tag) => (
-                                <span className="mini-tag" key={tag.id}>
-                                  #{tag.name}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void addInspirationToPlan(card)}
-                          >
-                            加入计划
-                          </button>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </section>
-          ) : (
-            <section className="plan-reference-panel plan-reference-panel--empty">
-              <div>
-                <h2>参考灵感管理</h2>
-                <p className="muted-text">
-                  请选择一个拍摄计划来管理参考灵感。
-                </p>
-              </div>
-            </section>
-          )}
-
           <form className="search-filter-panel" onSubmit={handleFilter}>
             <div className="filter-panel-title">
               <strong>筛选拍摄计划</strong>
@@ -843,7 +662,7 @@ export default function ShootingPlanPage() {
               {plans.map((plan) => (
                 <article
                   className={`entity-card shooting-plan-card ${
-                    activeReferencePlanId === plan.id
+                    isReferenceModalOpen && activeReferencePlanId === plan.id
                       ? "shooting-plan-card--active-reference"
                       : ""
                   }`}
@@ -860,7 +679,7 @@ export default function ShootingPlanPage() {
                       {statusLabel(plan.status)}
                     </span>
                   </div>
-                  {activeReferencePlanId === plan.id && (
+                  {isReferenceModalOpen && activeReferencePlanId === plan.id && (
                     <p className="active-reference-label">正在管理参考灵感</p>
                   )}
 
@@ -946,6 +765,207 @@ export default function ShootingPlanPage() {
           )}
         </section>
       </div>
+
+      {isReferenceModalOpen && activeReferencePlan && (
+        <div className="reference-modal-overlay" role="presentation">
+          <section
+            aria-labelledby="reference-modal-title"
+            aria-modal="true"
+            className="reference-modal"
+            role="dialog"
+          >
+            <header className="reference-modal-header">
+              <div>
+                <p className="page-kicker">Plan References</p>
+                <h2 id="reference-modal-title">管理参考灵感</h2>
+                <p className="muted-text">
+                  当前计划：{activeReferencePlan.title}
+                  {activeReferencePlan.project_name
+                    ? ` · 所属项目：${activeReferencePlan.project_name}`
+                    : ""}
+                </p>
+              </div>
+              <button
+                aria-label="关闭参考灵感管理"
+                className="reference-modal-close"
+                type="button"
+                onClick={closeReferenceModal}
+              >
+                关闭
+              </button>
+            </header>
+
+            <div className="reference-modal-body">
+              {isReferenceLoading ? (
+                <p className="muted-text">正在加载参考灵感...</p>
+              ) : (
+                <>
+                  <section className="reference-modal-section">
+                    <div className="reference-section-title">
+                      <div>
+                        <h3>已选参考灵感</h3>
+                        <p className="muted-text">
+                          这些灵感会作为当前拍摄计划的模仿和执行参考。
+                        </p>
+                      </div>
+                      <span>{linkedInspirations.length} 个已选</span>
+                    </div>
+
+                    {linkedInspirations.length === 0 ? (
+                      <p className="empty-message">还没有为该计划选择参考灵感。</p>
+                    ) : (
+                      <div className="selected-reference-strip">
+                        {linkedInspirations.map((card) => (
+                          <article className="reference-card reference-card--selected" key={card.id}>
+                            <InspirationCover
+                              asset={inspirationCoverMap[card.id] ?? null}
+                              isBroken={brokenCoverIds.has(card.id)}
+                              onBroken={() => markCoverBroken(card.id)}
+                            />
+                            <div className="reference-card-body">
+                              <strong>{card.title}</strong>
+                              <p>
+                                {platformLabel(card.source_platform)}
+                                {card.author_name ? ` · ${card.author_name}` : ""}
+                              </p>
+                              <div className="mini-tag-list">
+                                {card.tags.map((tag) => (
+                                  <span className="mini-tag" key={tag.id}>
+                                    #{tag.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <button
+                              className="danger-button"
+                              type="button"
+                              onClick={() => requestDetachInspiration(card)}
+                            >
+                              从计划移除
+                            </button>
+                            {pendingDetachInspiration?.id === card.id && (
+                              <div className="inline-confirm">
+                                <p>确定从计划中移除「{card.title}」吗？</p>
+                                <div className="row-actions">
+                                  <button
+                                    className="danger-button"
+                                    type="button"
+                                    onClick={() => void confirmDetachInspiration()}
+                                  >
+                                    确认移除
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingDetachInspiration(null)}
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="reference-modal-section">
+                    <form
+                      className="search-filter-panel reference-search-panel"
+                      onSubmit={handleInspirationFilter}
+                    >
+                      <div className="filter-panel-title">
+                        <strong>从灵感库添加</strong>
+                        <span>{availableInspirations.length} 个可加入灵感</span>
+                      </div>
+                      <div className="search-filter-bar reference-modal-filter-bar">
+                        <input
+                          className="search-filter-input"
+                          value={inspirationFilters.keyword}
+                          onChange={(event) =>
+                            setInspirationFilters((current) => ({
+                              ...current,
+                              keyword: event.target.value,
+                            }))
+                          }
+                          placeholder="搜索标题 / 作者 / 备注 / 链接 / 标签..."
+                        />
+                        <select
+                          className="search-filter-select"
+                          value={inspirationFilters.source_platform}
+                          onChange={(event) =>
+                            setInspirationFilters((current) => ({
+                              ...current,
+                              source_platform: event.target.value as "" | SourcePlatform,
+                            }))
+                          }
+                        >
+                          <option value="">全部平台</option>
+                          {sourcePlatforms.map((platform) => (
+                            <option key={platform.value} value={platform.value}>
+                              {platform.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="search-filter-actions">
+                          <button className="search-filter-button" type="submit">
+                            筛选
+                          </button>
+                          <button
+                            className="search-filter-reset"
+                            type="button"
+                            onClick={() => void clearInspirationFilters()}
+                          >
+                            清空
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+
+                    {availableInspirations.length === 0 ? (
+                      <p className="empty-message">没有匹配的可加入灵感。</p>
+                    ) : (
+                      <div className="reference-card-wall">
+                        {availableInspirations.map((card) => (
+                          <article className="reference-card reference-card--wall" key={card.id}>
+                            <InspirationCover
+                              asset={inspirationCoverMap[card.id] ?? null}
+                              isBroken={brokenCoverIds.has(card.id)}
+                              onBroken={() => markCoverBroken(card.id)}
+                            />
+                            <div className="reference-card-body">
+                              <strong>{card.title}</strong>
+                              <p>
+                                {platformLabel(card.source_platform)}
+                                {card.author_name ? ` · ${card.author_name}` : ""}
+                              </p>
+                              {card.notes && <p className="note-text">{card.notes}</p>}
+                              <div className="mini-tag-list">
+                                {card.tags.map((tag) => (
+                                  <span className="mini-tag" key={tag.id}>
+                                    #{tag.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <button
+                              className="primary-button"
+                              type="button"
+                              onClick={() => void addInspirationToPlan(card)}
+                            >
+                              加入计划
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
