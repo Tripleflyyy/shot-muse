@@ -72,6 +72,7 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
           post_style TEXT,
           technique_notes TEXT,
           notes TEXT,
+          cover_media_asset_id TEXT,
           status TEXT NOT NULL DEFAULT 'draft',
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
@@ -130,7 +131,36 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
 
         PRAGMA user_version = 1;
         ",
-    )
+    )?;
+
+    ensure_column(
+        connection,
+        "shooting_plans",
+        "cover_media_asset_id",
+        "ALTER TABLE shooting_plans ADD COLUMN cover_media_asset_id TEXT",
+    )?;
+
+    Ok(())
+}
+
+fn ensure_column(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+    alter_sql: &str,
+) -> rusqlite::Result<()> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table_name})"))?;
+    let exists = statement
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .iter()
+        .any(|name| name == column_name);
+
+    if !exists {
+        connection.execute(alter_sql, [])?;
+    }
+
+    Ok(())
 }
 
 pub fn seed_default_tags(connection: &Connection) -> rusqlite::Result<usize> {

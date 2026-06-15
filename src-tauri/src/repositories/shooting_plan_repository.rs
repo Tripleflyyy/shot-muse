@@ -142,6 +142,7 @@ pub fn get_shooting_plan(
               shooting_plans.post_style,
               shooting_plans.technique_notes,
               shooting_plans.notes,
+              shooting_plans.cover_media_asset_id,
               shooting_plans.status,
               shooting_plans.created_at,
               shooting_plans.updated_at
@@ -175,6 +176,7 @@ pub fn list_shooting_plans(
           shooting_plans.post_style,
           shooting_plans.technique_notes,
           shooting_plans.notes,
+          shooting_plans.cover_media_asset_id,
           shooting_plans.status,
           shooting_plans.created_at,
           shooting_plans.updated_at
@@ -246,6 +248,37 @@ pub fn list_shooting_plans_by_project(
     )
 }
 
+pub fn update_shooting_plan_cover(
+    connection: &Connection,
+    id: &str,
+    cover_media_asset_id: Option<String>,
+) -> rusqlite::Result<Option<ShootingPlan>> {
+    let updated_count = connection.execute(
+        "
+        UPDATE shooting_plans
+        SET
+          cover_media_asset_id = ?2,
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ?1
+        ",
+        params![id, normalize_optional_text(&cover_media_asset_id)],
+    )?;
+
+    if updated_count == 0 {
+        return Ok(None);
+    }
+
+    get_shooting_plan(connection, id)
+}
+
+pub fn media_asset_exists(connection: &Connection, id: &str) -> rusqlite::Result<bool> {
+    connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM media_assets WHERE id = ?1)",
+        [id],
+        |row| row.get::<_, i64>(0).map(|value| value == 1),
+    )
+}
+
 pub fn shooting_plan_exists(connection: &Connection, id: &str) -> rusqlite::Result<bool> {
     connection.query_row(
         "SELECT EXISTS(SELECT 1 FROM shooting_plans WHERE id = ?1)",
@@ -277,9 +310,10 @@ fn map_shooting_plan(row: &rusqlite::Row<'_>) -> rusqlite::Result<ShootingPlan> 
         post_style: row.get(10)?,
         technique_notes: row.get(11)?,
         notes: row.get(12)?,
-        status: row.get(13)?,
-        created_at: row.get(14)?,
-        updated_at: row.get(15)?,
+        cover_media_asset_id: row.get(13)?,
+        status: row.get(14)?,
+        created_at: row.get(15)?,
+        updated_at: row.get(16)?,
     })
 }
 
@@ -352,6 +386,7 @@ mod tests {
         .expect("create shooting plan");
         assert_eq!(created.status, "draft");
         assert_eq!(created.project_name.as_deref(), Some("测试拍摄项目"));
+        assert!(created.cover_media_asset_id.is_none());
 
         let fetched = get_shooting_plan(&connection, &created.id)
             .expect("get shooting plan")
@@ -372,6 +407,70 @@ mod tests {
         assert!(get_shooting_plan(&connection, &created.id)
             .expect("get deleted shooting plan")
             .is_none());
+    }
+
+    #[test]
+    fn update_shooting_plan_cover_is_returned_by_get_and_list() {
+        let connection = test_connection();
+        let project_id = create_project(&connection, "封面测试项目");
+        let created =
+            create_shooting_plan(&connection, &payload(&project_id, "封面测试计划", None))
+                .expect("create shooting plan");
+        let media_id = "media-cover-id";
+
+        connection
+            .execute(
+                "
+                INSERT INTO media_assets (
+                  id,
+                  target_type,
+                  target_id,
+                  file_path,
+                  original_filename,
+                  mime_type,
+                  file_size,
+                  width,
+                  height,
+                  source_type,
+                  created_at,
+                  updated_at
+                )
+                VALUES (
+                  ?1,
+                  'inspiration',
+                  'inspiration-id',
+                  '/media/inspiration/test.jpg',
+                  'test.jpg',
+                  'image/jpeg',
+                  1024,
+                  800,
+                  600,
+                  'file_picker',
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                )
+                ",
+                [media_id],
+            )
+            .expect("insert media asset");
+
+        let updated = update_shooting_plan_cover(&connection, &created.id, Some(media_id.into()))
+            .expect("update cover")
+            .expect("updated plan exists");
+        assert_eq!(updated.cover_media_asset_id.as_deref(), Some(media_id));
+
+        let fetched = get_shooting_plan(&connection, &created.id)
+            .expect("get plan")
+            .expect("plan exists");
+        assert_eq!(fetched.cover_media_asset_id.as_deref(), Some(media_id));
+
+        let listed = list_shooting_plans(&connection, &ShootingPlanFilters {
+            project_id: Some(project_id),
+            status: None,
+            keyword: None,
+        })
+        .expect("list plans");
+        assert_eq!(listed[0].cover_media_asset_id.as_deref(), Some(media_id));
     }
 
     #[test]

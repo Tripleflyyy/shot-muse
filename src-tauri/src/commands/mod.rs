@@ -22,7 +22,7 @@ pub use project_commands::{
 };
 pub use shooting_plan_commands::{
     create_shooting_plan, delete_shooting_plan, get_shooting_plan, list_shooting_plans,
-    list_shooting_plans_by_project, update_shooting_plan,
+    list_shooting_plans_by_project, update_shooting_plan, update_shooting_plan_cover,
 };
 pub use shooting_plan_inspiration_commands::{
     attach_inspiration_to_shooting_plan, detach_inspiration_from_shooting_plan,

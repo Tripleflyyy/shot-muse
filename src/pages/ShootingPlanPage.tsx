@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InspirationCard, SourcePlatform } from "../services/inspirationApi";
 import {
   getMediaAssetDisplayUrl,
+  getMediaAsset,
   listMediaAssetsByTarget,
   MediaAsset,
 } from "../services/mediaApi";
@@ -21,6 +22,7 @@ import {
   ShootingPlanPayload,
   ShootingPlanStatus,
   updateShootingPlan,
+  updateShootingPlanCover,
 } from "../services/shootingPlanApi";
 
 type ShootingPlanFormState = {
@@ -47,6 +49,11 @@ type ShootingPlanFilterState = {
 type PlanInspirationFilterState = {
   keyword: string;
   source_platform: "" | SourcePlatform;
+};
+
+type PlanReferencePreview = {
+  cards: InspirationCard[];
+  total: number;
 };
 
 const emptyForm: ShootingPlanFormState = {
@@ -99,18 +106,25 @@ export default function ShootingPlanPage() {
   const [activeReferencePlanId, setActiveReferencePlanId] = useState<string | null>(null);
   const [linkedInspirations, setLinkedInspirations] = useState<InspirationCard[]>([]);
   const [availableInspirations, setAvailableInspirations] = useState<InspirationCard[]>([]);
+  const [planReferencePreviewMap, setPlanReferencePreviewMap] = useState<
+    Record<string, PlanReferencePreview>
+  >({});
+  const [planCoverMap, setPlanCoverMap] = useState<Record<string, MediaAsset | null>>({});
+  const [planPreviewCoverMap, setPlanPreviewCoverMap] = useState<
+    Record<string, MediaAsset | null>
+  >({});
   const [inspirationCoverMap, setInspirationCoverMap] = useState<
     Record<string, MediaAsset | null>
   >({});
   const [brokenCoverIds, setBrokenCoverIds] = useState<Set<string>>(new Set());
+  const [brokenPlanCoverIds, setBrokenPlanCoverIds] = useState<Set<string>>(new Set());
   const [inspirationFilters, setInspirationFilters] =
     useState<PlanInspirationFilterState>(emptyInspirationFilters);
   const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
+  const [expandedInspirationId, setExpandedInspirationId] = useState<string | null>(null);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [pendingDeletePlan, setPendingDeletePlan] =
     useState<ShootingPlan | null>(null);
-  const [pendingDetachInspiration, setPendingDetachInspiration] =
-    useState<InspirationCard | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isReferenceLoading, setIsReferenceLoading] = useState(false);
@@ -140,6 +154,7 @@ export default function ShootingPlanPage() {
       ]);
       setProjects(projectData);
       setPlans(planData);
+      await loadPlanPreviews(planData);
     } catch (error) {
       alert(toErrorMessage(error, "加载拍摄计划失败"));
     } finally {
@@ -150,13 +165,13 @@ export default function ShootingPlanPage() {
   async function loadPlans(nextFilters = filters) {
     setIsLoading(true);
     try {
-      setPlans(
-        await listShootingPlans({
-          keyword: optionalText(nextFilters.keyword),
-          project_id: optionalText(nextFilters.project_id),
-          status: nextFilters.status || null,
-        }),
-      );
+      const planData = await listShootingPlans({
+        keyword: optionalText(nextFilters.keyword),
+        project_id: optionalText(nextFilters.project_id),
+        status: nextFilters.status || null,
+      });
+      setPlans(planData);
+      await loadPlanPreviews(planData);
     } catch (error) {
       alert(toErrorMessage(error, "加载拍摄计划失败"));
     } finally {
@@ -263,19 +278,19 @@ export default function ShootingPlanPage() {
     setInspirationCoverMap({});
     setBrokenCoverIds(new Set());
     setInspirationFilters(emptyInspirationFilters);
-    setPendingDetachInspiration(null);
+    setExpandedInspirationId(null);
   }
 
   function managePlanInspirations(plan: ShootingPlan) {
     setActiveReferencePlanId(plan.id);
     setIsReferenceModalOpen(true);
-    setPendingDetachInspiration(null);
+    setExpandedInspirationId(null);
     void loadPlanReferences(plan.id, inspirationFilters);
   }
 
   function closeReferenceModal() {
     setIsReferenceModalOpen(false);
-    setPendingDetachInspiration(null);
+    setExpandedInspirationId(null);
   }
 
   async function loadPlanReferences(
@@ -323,33 +338,145 @@ export default function ShootingPlanPage() {
     }
 
     try {
+      setExpandedInspirationId(null);
       await attachInspirationToShootingPlan(activeReferencePlanId, card.id);
       await loadPlanReferences(activeReferencePlanId);
+      await loadPlanPreviews(plans);
     } catch (error) {
       alert(toErrorMessage(error, "加入计划参考灵感失败"));
     }
   }
 
-  function requestDetachInspiration(card: InspirationCard) {
-    setPendingDetachInspiration(card);
-  }
-
-  async function confirmDetachInspiration() {
-    if (!activeReferencePlanId || !pendingDetachInspiration) {
+  async function detachInspirationFromPlan(card: InspirationCard) {
+    if (!activeReferencePlanId) {
       return;
     }
 
     try {
+      setExpandedInspirationId(null);
       await detachInspirationFromShootingPlan(
         activeReferencePlanId,
-        pendingDetachInspiration.id,
+        card.id,
       );
-      setPendingDetachInspiration(null);
       await loadPlanReferences(activeReferencePlanId);
+      await loadPlanPreviews(plans);
     } catch (error) {
       console.error("移除计划参考灵感失败", error);
       alert(toErrorMessage(error, "移除计划参考灵感失败"));
     }
+  }
+
+  async function setPlanCoverFromCard(card: InspirationCard) {
+    if (!activeReferencePlanId) {
+      alert("请先选择拍摄计划");
+      return;
+    }
+
+    const cover = inspirationCoverMap[card.id];
+    if (!cover) {
+      alert("这张灵感还没有可用图片，无法设为封面");
+      return;
+    }
+
+    try {
+      const updated = await updateShootingPlanCover(activeReferencePlanId, cover.id);
+      setPlans((current) =>
+        current.map((plan) => (plan.id === updated.id ? updated : plan)),
+      );
+      setPlanCoverMap((current) => ({
+        ...current,
+        [activeReferencePlanId]: cover,
+      }));
+      setBrokenPlanCoverIds((current) => {
+        const next = new Set(current);
+        next.delete(activeReferencePlanId);
+        return next;
+      });
+    } catch (error) {
+      console.error("设置拍摄计划封面失败", error);
+      alert(toErrorMessage(error, "设置拍摄计划封面失败"));
+    }
+  }
+
+  async function loadPlanPreviews(planData: ShootingPlan[]) {
+    if (planData.length === 0) {
+      setPlanReferencePreviewMap({});
+      setPlanCoverMap({});
+      setPlanPreviewCoverMap({});
+      return;
+    }
+
+    const previewEntries = await Promise.all(
+      planData.map(async (plan) => {
+        try {
+          const references = await listShootingPlanInspirations(plan.id);
+          const previewCards = references.slice(0, 4);
+          const coverEntries = await loadCoverEntries(previewCards);
+          const previewCover =
+            coverEntries.find(([, asset]) => asset !== null)?.[1] ?? null;
+
+          return {
+            planId: plan.id,
+            preview: {
+              cards: previewCards,
+              total: references.length,
+            },
+            covers: coverEntries,
+            previewCover,
+          };
+        } catch (error) {
+          console.error("加载拍摄计划参考灵感预览失败", {
+            planId: plan.id,
+            error,
+          });
+          return {
+            planId: plan.id,
+            preview: {
+              cards: [],
+              total: 0,
+            },
+            covers: [],
+            previewCover: null,
+          };
+        }
+      }),
+    );
+
+    const explicitCoverEntries = await Promise.all(
+      planData.map(async (plan) => {
+        if (!plan.cover_media_asset_id) {
+          return [plan.id, null] as const;
+        }
+
+        try {
+          return [plan.id, await getMediaAsset(plan.cover_media_asset_id)] as const;
+        } catch (error) {
+          console.error("加载拍摄计划封面失败", {
+            planId: plan.id,
+            mediaAssetId: plan.cover_media_asset_id,
+            error,
+          });
+          return [plan.id, null] as const;
+        }
+      }),
+    );
+
+    const allCardCoverEntries = previewEntries.flatMap((entry) => entry.covers);
+    setInspirationCoverMap((current) => ({
+      ...current,
+      ...Object.fromEntries(allCardCoverEntries),
+    }));
+    setPlanReferencePreviewMap(
+      Object.fromEntries(
+        previewEntries.map((entry) => [entry.planId, entry.preview]),
+      ),
+    );
+    setPlanPreviewCoverMap(
+      Object.fromEntries(
+        previewEntries.map((entry) => [entry.planId, entry.previewCover]),
+      ),
+    );
+    setPlanCoverMap(Object.fromEntries(explicitCoverEntries));
   }
 
   async function loadInspirationCovers(cards: InspirationCard[]) {
@@ -377,10 +504,37 @@ export default function ShootingPlanPage() {
     setBrokenCoverIds(new Set());
   }
 
+  async function loadCoverEntries(cards: InspirationCard[]) {
+    const uniqueCards = cards.filter(
+      (card, index, allCards) =>
+        allCards.findIndex((candidate) => candidate.id === card.id) === index,
+    );
+
+    return Promise.all(
+      uniqueCards.map(async (card) => {
+        try {
+          const media = await listMediaAssetsByTarget("inspiration", card.id);
+          return [card.id, media[0] ?? null] as const;
+        } catch (error) {
+          console.error("加载参考灵感封面失败", { cardId: card.id, error });
+          return [card.id, null] as const;
+        }
+      }),
+    );
+  }
+
   function markCoverBroken(cardId: string) {
     setBrokenCoverIds((current) => {
       const next = new Set(current);
       next.add(cardId);
+      return next;
+    });
+  }
+
+  function markPlanCoverBroken(planId: string) {
+    setBrokenPlanCoverIds((current) => {
+      const next = new Set(current);
+      next.add(planId);
       return next;
     });
   }
@@ -659,108 +813,112 @@ export default function ShootingPlanPage() {
             </p>
           ) : (
             <div className="entity-list">
-              {plans.map((plan) => (
-                <article
-                  className={`entity-card shooting-plan-card ${
-                    isReferenceModalOpen && activeReferencePlanId === plan.id
-                      ? "shooting-plan-card--active-reference"
-                      : ""
-                  }`}
-                  key={plan.id}
-                >
-                  <div className="entity-card-header">
-                    <div>
-                      <h2>{plan.title}</h2>
-                      <p>
-                        {plan.project_name ?? "未知项目"} · {statusLabel(plan.status)}
-                      </p>
-                    </div>
-                    <span className={`status-pill status-pill--${plan.status}`}>
-                      {statusLabel(plan.status)}
-                    </span>
-                  </div>
-                  {isReferenceModalOpen && activeReferencePlanId === plan.id && (
-                    <p className="active-reference-label">正在管理参考灵感</p>
-                  )}
+              {plans.map((plan) => {
+                const preview = planReferencePreviewMap[plan.id] ?? {
+                  cards: [],
+                  total: 0,
+                };
+                const coverAsset = planCoverMap[plan.id] ?? planPreviewCoverMap[plan.id] ?? null;
+                const hasCover = coverAsset && !brokenPlanCoverIds.has(plan.id);
 
-                  <dl className="compact-meta">
-                    <div>
-                      <dt>主题</dt>
-                      <dd>{plan.shooting_theme || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>器材</dt>
-                      <dd>{plan.gear_list || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>场景</dt>
-                      <dd>{plan.scene_list || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>动作</dt>
-                      <dd>{plan.action_list || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>构图</dt>
-                      <dd>{plan.composition_reference || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>光线</dt>
-                      <dd>{plan.lighting_reference || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>后期</dt>
-                      <dd>{plan.post_style || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>技术</dt>
-                      <dd>{plan.technique_notes || "-"}</dd>
-                    </div>
-                  </dl>
+                return (
+                  <article
+                    className={`entity-card shooting-plan-card shooting-plan-card--compact ${
+                      hasCover ? "shooting-plan-card--with-cover" : ""
+                    } ${
+                      isReferenceModalOpen && activeReferencePlanId === plan.id
+                        ? "shooting-plan-card--active-reference"
+                        : ""
+                    }`}
+                    key={plan.id}
+                  >
+                    {hasCover && (
+                      <img
+                        alt=""
+                        className="plan-card-cover-bg"
+                        src={getMediaAssetDisplayUrl(coverAsset)}
+                        onError={() => markPlanCoverBroken(plan.id)}
+                      />
+                    )}
+                    <div className="plan-card-content">
+                      <div className="entity-card-header">
+                        <div>
+                          <h2>{plan.title}</h2>
+                          <p>{plan.project_name ?? "未知项目"}</p>
+                        </div>
+                        <span className={`status-pill status-pill--${plan.status}`}>
+                          {statusLabel(plan.status)}
+                        </span>
+                      </div>
+                      {isReferenceModalOpen && activeReferencePlanId === plan.id && (
+                        <p className="active-reference-label">正在管理参考灵感</p>
+                      )}
 
-                  {plan.notes && <p className="note-text">{plan.notes}</p>}
+                      <div className="plan-compact-lines">
+                        <p>
+                          <span>风格主题</span>
+                          {plan.shooting_theme || "-"}
+                        </p>
+                        <p>
+                          <span>器材</span>
+                          {plan.gear_list || "-"}
+                        </p>
+                        <p>
+                          <span>策划概述</span>
+                          {plan.notes || "-"}
+                        </p>
+                      </div>
 
-                  <div className="row-actions">
-                    <button type="button" onClick={() => handleEdit(plan)}>
-                      编辑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => managePlanInspirations(plan)}
-                    >
-                      管理参考灵感
-                    </button>
-                    <button
-                      className="danger-button"
-                      type="button"
-                      onClick={() => requestDeletePlan(plan)}
-                    >
-                      删除
-                    </button>
-                  </div>
+                      <PlanReferencePreviewList
+                        brokenCoverIds={brokenCoverIds}
+                        inspirationCoverMap={inspirationCoverMap}
+                        onBroken={markCoverBroken}
+                        preview={preview}
+                      />
 
-                  {pendingDeletePlan?.id === plan.id && (
-                    <div className="inline-confirm">
-                      <p>确定删除拍摄计划「{plan.title}」吗？</p>
                       <div className="row-actions">
+                        <button type="button" onClick={() => handleEdit(plan)}>
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => managePlanInspirations(plan)}
+                        >
+                          管理参考灵感
+                        </button>
                         <button
                           className="danger-button"
                           type="button"
-                          onClick={() => void confirmDeletePlan()}
+                          onClick={() => requestDeletePlan(plan)}
                         >
-                          确认删除
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPendingDeletePlan(null)}
-                        >
-                          取消
+                          删除
                         </button>
                       </div>
+
+                      {pendingDeletePlan?.id === plan.id && (
+                        <div className="inline-confirm">
+                          <p>确定删除拍摄计划「{plan.title}」吗？</p>
+                          <div className="row-actions">
+                            <button
+                              className="danger-button"
+                              type="button"
+                              onClick={() => void confirmDeletePlan()}
+                            >
+                              确认删除
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPendingDeletePlan(null)}
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -816,7 +974,37 @@ export default function ShootingPlanPage() {
                     ) : (
                       <div className="selected-reference-strip">
                         {linkedInspirations.map((card) => (
-                          <article className="reference-card reference-card--selected" key={card.id}>
+                          <article
+                            className="reference-card reference-card--selected reference-card--clickable"
+                            key={card.id}
+                            onClick={() => void detachInspirationFromPlan(card)}
+                            title="点击取消选择"
+                          >
+                            <div className="reference-card-tools">
+                              <button
+                                aria-label={`展开 ${card.title} 详情`}
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setExpandedInspirationId((current) =>
+                                    current === card.id ? null : card.id,
+                                  );
+                                }}
+                              >
+                                详情
+                              </button>
+                              {inspirationCoverMap[card.id] && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void setPlanCoverFromCard(card);
+                                  }}
+                                >
+                                  设为封面
+                                </button>
+                              )}
+                            </div>
                             <InspirationCover
                               asset={inspirationCoverMap[card.id] ?? null}
                               isBroken={brokenCoverIds.has(card.id)}
@@ -836,32 +1024,21 @@ export default function ShootingPlanPage() {
                                 ))}
                               </div>
                             </div>
-                            <button
-                              className="danger-button"
-                              type="button"
-                              onClick={() => requestDetachInspiration(card)}
-                            >
-                              从计划移除
-                            </button>
-                            {pendingDetachInspiration?.id === card.id && (
-                              <div className="inline-confirm">
-                                <p>确定从计划中移除「{card.title}」吗？</p>
-                                <div className="row-actions">
-                                  <button
-                                    className="danger-button"
-                                    type="button"
-                                    onClick={() => void confirmDetachInspiration()}
-                                  >
-                                    确认移除
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setPendingDetachInspiration(null)}
-                                  >
-                                    取消
-                                  </button>
-                                </div>
-                              </div>
+                            <div className="reference-hover-preview">
+                              <strong>点击取消选择</strong>
+                              <p>{card.notes || "暂无备注"}</p>
+                              <span>
+                                {card.author_name ? `作者：${card.author_name}` : "作者未记录"}
+                              </span>
+                            </div>
+                            {expandedInspirationId === card.id && (
+                              <InspirationDetailPopover
+                                card={card}
+                                cover={inspirationCoverMap[card.id] ?? null}
+                                isBroken={brokenCoverIds.has(card.id)}
+                                onBroken={() => markCoverBroken(card.id)}
+                                onClose={() => setExpandedInspirationId(null)}
+                              />
                             )}
                           </article>
                         ))}
@@ -927,7 +1104,26 @@ export default function ShootingPlanPage() {
                     ) : (
                       <div className="reference-card-wall">
                         {availableInspirations.map((card) => (
-                          <article className="reference-card reference-card--wall" key={card.id}>
+                          <article
+                            className="reference-card reference-card--wall reference-card--clickable"
+                            key={card.id}
+                            onClick={() => void addInspirationToPlan(card)}
+                            title="点击加入计划"
+                          >
+                            <div className="reference-card-tools">
+                              <button
+                                aria-label={`展开 ${card.title} 详情`}
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setExpandedInspirationId((current) =>
+                                    current === card.id ? null : card.id,
+                                  );
+                                }}
+                              >
+                                详情
+                              </button>
+                            </div>
                             <InspirationCover
                               asset={inspirationCoverMap[card.id] ?? null}
                               isBroken={brokenCoverIds.has(card.id)}
@@ -948,13 +1144,22 @@ export default function ShootingPlanPage() {
                                 ))}
                               </div>
                             </div>
-                            <button
-                              className="primary-button"
-                              type="button"
-                              onClick={() => void addInspirationToPlan(card)}
-                            >
-                              加入计划
-                            </button>
+                            <div className="reference-hover-preview">
+                              <strong>点击加入计划</strong>
+                              <p>{card.notes || "暂无备注"}</p>
+                              <span>
+                                {card.author_name ? `作者：${card.author_name}` : "作者未记录"}
+                              </span>
+                            </div>
+                            {expandedInspirationId === card.id && (
+                              <InspirationDetailPopover
+                                card={card}
+                                cover={inspirationCoverMap[card.id] ?? null}
+                                isBroken={brokenCoverIds.has(card.id)}
+                                onBroken={() => markCoverBroken(card.id)}
+                                onClose={() => setExpandedInspirationId(null)}
+                              />
+                            )}
                           </article>
                         ))}
                       </div>
@@ -1023,6 +1228,113 @@ function InspirationCover({
           onBroken();
         }}
       />
+    </div>
+  );
+}
+
+function PlanReferencePreviewList({
+  preview,
+  inspirationCoverMap,
+  brokenCoverIds,
+  onBroken,
+}: {
+  preview: PlanReferencePreview;
+  inspirationCoverMap: Record<string, MediaAsset | null>;
+  brokenCoverIds: Set<string>;
+  onBroken: (cardId: string) => void;
+}) {
+  if (preview.cards.length === 0) {
+    return <p className="plan-reference-empty">暂无参考灵感</p>;
+  }
+
+  const remainingCount = Math.max(0, preview.total - preview.cards.length);
+
+  return (
+    <div className="plan-reference-preview-list">
+      {preview.cards.map((card) => {
+        const cover = inspirationCoverMap[card.id] ?? null;
+        const isBroken = brokenCoverIds.has(card.id);
+
+        return (
+          <div className="plan-reference-preview" key={card.id}>
+            {cover && !isBroken ? (
+              <img
+                src={getMediaAssetDisplayUrl(cover)}
+                alt={cover.original_filename ?? card.title}
+                onError={() => onBroken(card.id)}
+              />
+            ) : (
+              <span>暂无图片</span>
+            )}
+            <strong>{card.title}</strong>
+          </div>
+        );
+      })}
+      {remainingCount > 0 && (
+        <div className="plan-reference-more">+{remainingCount}</div>
+      )}
+    </div>
+  );
+}
+
+function InspirationDetailPopover({
+  card,
+  cover,
+  isBroken,
+  onBroken,
+  onClose,
+}: {
+  card: InspirationCard;
+  cover: MediaAsset | null;
+  isBroken: boolean;
+  onBroken: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="reference-detail-popover"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="reference-detail-header">
+        <strong>{card.title}</strong>
+        <button type="button" onClick={onClose}>
+          关闭
+        </button>
+      </div>
+      <InspirationCover asset={cover} isBroken={isBroken} onBroken={onBroken} />
+      <dl className="reference-detail-meta">
+        <div>
+          <dt>平台</dt>
+          <dd>{platformLabel(card.source_platform)}</dd>
+        </div>
+        <div>
+          <dt>作者</dt>
+          <dd>{card.author_name || "-"}</dd>
+        </div>
+        <div>
+          <dt>链接</dt>
+          <dd>
+            {card.source_url ? (
+              <a href={card.source_url} rel="noreferrer" target="_blank">
+                {card.source_url}
+              </a>
+            ) : (
+              "-"
+            )}
+          </dd>
+        </div>
+      </dl>
+      <div className="mini-tag-list">
+        {card.tags.map((tag) => (
+          <span className="mini-tag" key={tag.id}>
+            #{tag.name}
+          </span>
+        ))}
+      </div>
+      <div className="reference-detail-notes">
+        <h4>备注</h4>
+        <p>{card.notes || "暂无备注"}</p>
+      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ export type ShootingPlan = {
   post_style: string | null;
   technique_notes: string | null;
   notes: string | null;
+  cover_media_asset_id: string | null;
   status: ShootingPlanStatus;
   created_at: string;
   updated_at: string;
@@ -65,6 +66,16 @@ export async function deleteShootingPlan(id: string): Promise<boolean> {
     throw new Error("未找到要删除的拍摄计划");
   }
   return deleted;
+}
+
+export async function updateShootingPlanCover(
+  id: string,
+  coverMediaAssetId: string | null,
+): Promise<ShootingPlan> {
+  return invoke<ShootingPlan>("update_shooting_plan_cover", {
+    id,
+    coverMediaAssetId,
+  });
 }
 
 export async function getShootingPlan(id: string): Promise<ShootingPlan> {

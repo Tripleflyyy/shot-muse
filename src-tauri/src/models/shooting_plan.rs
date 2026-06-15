@@ -15,6 +15,7 @@ pub struct ShootingPlan {
     pub post_style: Option<String>,
     pub technique_notes: Option<String>,
     pub notes: Option<String>,
+    pub cover_media_asset_id: Option<String>,
     pub status: String,
     pub created_at: String,
     pub updated_at: String,
