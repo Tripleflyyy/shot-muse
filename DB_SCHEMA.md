@@ -11,6 +11,52 @@
 - 前端 MVP 可以只显示第一张图
 - 数据库设计支持未来多图扩展
 
+## 1.1 当前实现与计划演进
+
+当前已实现层：
+
+- projects
+- inspiration_cards
+- tags
+- inspiration_card_tags
+- media_assets
+- shooting_plans
+- shooting_plan_inspirations
+
+计划中的数据库演进方向：
+
+1. Card Library 统一卡片库
+
+当前 `inspiration_cards` 后续可能演进为 `reference_cards`，或在现有卡片表上增加 `card_type` 字段。
+
+`card_type` 计划值：
+
+- inspiration
+- technique
+
+说明：统一卡片库用于支持“全部 / 灵感 / 技巧”视图，让图片、标签、来源、描述、搜索和 Plan 引用逻辑复用。
+
+2. 多图卡片
+
+当前 `media_assets` 已支持同一 `target_type + target_id` 关联多张图片。后续可增加以下能力：
+
+- `cover_media_asset_id`：指定封面图
+- `sort_order`：支持图片排序
+
+说明：列表页只显示封面图；卡片详情 / 编辑页支持多图翻动，默认第一张图片作为封面。
+
+3. Plan References
+
+当前 `shooting_plan_inspirations` 支持 Plan 关联灵感卡。Card Library 统一后，后续可演进为 `shooting_plan_reference_cards` 或类似结构，以支持 Plan 同时关联灵感卡和技巧卡。
+
+约束：
+
+- 关联只建立引用关系。
+- 不复制卡片。
+- 不移动卡片。
+- 移除关联不删除原卡片。
+- 一个卡片可以被多个 Plan 复用。
+
 ## 2. projects 表
 
 ```sql

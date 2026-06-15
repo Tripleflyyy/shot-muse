@@ -111,6 +111,37 @@ pub fn list_shooting_plans_by_project(
         .map_err(command_error)
 }
 
+#[tauri::command]
+pub fn update_shooting_plan_cover(
+    state: State<'_, AppState>,
+    id: String,
+    cover_media_asset_id: Option<String>,
+) -> Result<ShootingPlan, String> {
+    validate_id(&id, "拍摄计划 ID 不能为空")?;
+    let cover_media_asset_id = normalize_optional_string(cover_media_asset_id);
+
+    state
+        .with_connection(|connection| {
+            if !shooting_plan_repository::shooting_plan_exists(connection, &id)? {
+                return Err(rusqlite::Error::QueryReturnedNoRows);
+            }
+
+            if let Some(media_asset_id) = cover_media_asset_id.as_deref() {
+                if !shooting_plan_repository::media_asset_exists(connection, media_asset_id)? {
+                    return Err(validation_error("封面图片不存在"));
+                }
+            }
+
+            shooting_plan_repository::update_shooting_plan_cover(
+                connection,
+                &id,
+                cover_media_asset_id,
+            )?
+            .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)
+        })
+        .map_err(command_error)
+}
+
 fn validate_payload_shape(payload: &ShootingPlanPayload) -> Result<(), String> {
     if payload.project_id.trim().is_empty() {
         return Err("关联项目不能为空".to_string());

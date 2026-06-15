@@ -38,6 +38,7 @@ pub fn app_builder(app_state: AppState) -> tauri::Builder<tauri::Wry> {
             commands::media_commands::update_media_asset_target,
             commands::media_commands::delete_media_asset,
             commands::media_commands::import_local_image,
+            commands::media_commands::import_shooting_plan_image,
             commands::tag_commands::list_tags,
             commands::tag_commands::create_custom_tag,
             commands::tag_commands::update_tag,
@@ -49,7 +50,12 @@ pub fn app_builder(app_state: AppState) -> tauri::Builder<tauri::Wry> {
             commands::shooting_plan_commands::delete_shooting_plan,
             commands::shooting_plan_commands::get_shooting_plan,
             commands::shooting_plan_commands::list_shooting_plans,
-            commands::shooting_plan_commands::list_shooting_plans_by_project
+            commands::shooting_plan_commands::list_shooting_plans_by_project,
+            commands::shooting_plan_commands::update_shooting_plan_cover,
+            commands::shooting_plan_inspiration_commands::attach_inspiration_to_shooting_plan,
+            commands::shooting_plan_inspiration_commands::detach_inspiration_from_shooting_plan,
+            commands::shooting_plan_inspiration_commands::list_shooting_plan_inspirations,
+            commands::shooting_plan_inspiration_commands::list_available_inspirations_for_shooting_plan
         ])
 }
 
@@ -87,6 +93,7 @@ pub fn run() {
             commands::media_commands::update_media_asset_target,
             commands::media_commands::delete_media_asset,
             commands::media_commands::import_local_image,
+            commands::media_commands::import_shooting_plan_image,
             commands::tag_commands::list_tags,
             commands::tag_commands::create_custom_tag,
             commands::tag_commands::update_tag,
@@ -98,7 +105,12 @@ pub fn run() {
             commands::shooting_plan_commands::delete_shooting_plan,
             commands::shooting_plan_commands::get_shooting_plan,
             commands::shooting_plan_commands::list_shooting_plans,
-            commands::shooting_plan_commands::list_shooting_plans_by_project
+            commands::shooting_plan_commands::list_shooting_plans_by_project,
+            commands::shooting_plan_commands::update_shooting_plan_cover,
+            commands::shooting_plan_inspiration_commands::attach_inspiration_to_shooting_plan,
+            commands::shooting_plan_inspiration_commands::detach_inspiration_from_shooting_plan,
+            commands::shooting_plan_inspiration_commands::list_shooting_plan_inspirations,
+            commands::shooting_plan_inspiration_commands::list_available_inspirations_for_shooting_plan
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Shot Muse Tauri application");
