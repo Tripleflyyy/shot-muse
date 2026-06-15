@@ -120,6 +120,10 @@ export default function ShootingPlanPage() {
   const [brokenPlanCoverIds, setBrokenPlanCoverIds] = useState<Set<string>>(new Set());
   const [inspirationFilters, setInspirationFilters] =
     useState<PlanInspirationFilterState>(emptyInspirationFilters);
+  const [isPlanFormModalOpen, setIsPlanFormModalOpen] = useState(false);
+  const [selectedPlanForDetail, setSelectedPlanForDetail] =
+    useState<ShootingPlan | null>(null);
+  const [isPlanDetailEditing, setIsPlanDetailEditing] = useState(false);
   const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
   const [expandedInspirationId, setExpandedInspirationId] = useState<string | null>(null);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -134,11 +138,6 @@ export default function ShootingPlanPage() {
     () => plans.find((plan) => plan.id === activeReferencePlanId) ?? null,
     [activeReferencePlanId, plans],
   );
-  const submitLabel = useMemo(
-    () => (isEditing ? "保存修改" : "创建拍摄计划"),
-    [isEditing],
-  );
-
   useEffect(() => {
     void loadInitialData();
     // Load once on page mount; filters are applied explicitly.
@@ -195,10 +194,16 @@ export default function ShootingPlanPage() {
     setIsSaving(true);
     try {
       const payload = toPayload(form);
+      let savedPlan: ShootingPlan;
       if (editingPlanId) {
-        await updateShootingPlan(editingPlanId, payload);
+        savedPlan = await updateShootingPlan(editingPlanId, payload);
+        setSelectedPlanForDetail(savedPlan);
+        setIsPlanDetailEditing(false);
       } else {
-        await createShootingPlan(payload);
+        savedPlan = await createShootingPlan(payload);
+        setIsPlanFormModalOpen(false);
+        setSelectedPlanForDetail(savedPlan);
+        setIsPlanDetailEditing(false);
       }
 
       resetForm();
@@ -212,6 +217,7 @@ export default function ShootingPlanPage() {
 
   function handleEdit(plan: ShootingPlan) {
     setEditingPlanId(plan.id);
+    setIsPlanDetailEditing(true);
     setPendingDeletePlan(null);
     setForm({
       project_id: plan.project_id,
@@ -233,6 +239,33 @@ export default function ShootingPlanPage() {
     setPendingDeletePlan(plan);
   }
 
+  function openNewPlanModal() {
+    resetForm();
+    setSelectedPlanForDetail(null);
+    setIsPlanDetailEditing(false);
+    setIsPlanFormModalOpen(true);
+  }
+
+  function closeNewPlanModal() {
+    setIsPlanFormModalOpen(false);
+    resetForm();
+  }
+
+  function openPlanDetail(plan: ShootingPlan) {
+    setSelectedPlanForDetail(plan);
+    setIsPlanDetailEditing(false);
+    setPendingDeletePlan(null);
+  }
+
+  function closePlanDetail() {
+    setSelectedPlanForDetail(null);
+    setIsPlanDetailEditing(false);
+    setPendingDeletePlan(null);
+    if (editingPlanId) {
+      resetForm();
+    }
+  }
+
   async function confirmDeletePlan() {
     if (!pendingDeletePlan) {
       return;
@@ -245,6 +278,10 @@ export default function ShootingPlanPage() {
       }
       if (activeReferencePlanId === pendingDeletePlan.id) {
         clearReferenceState();
+      }
+      if (selectedPlanForDetail?.id === pendingDeletePlan.id) {
+        setSelectedPlanForDetail(null);
+        setIsPlanDetailEditing(false);
       }
       setPendingDeletePlan(null);
       await loadPlans();
@@ -410,7 +447,7 @@ export default function ShootingPlanPage() {
       planData.map(async (plan) => {
         try {
           const references = await listShootingPlanInspirations(plan.id);
-          const previewCards = references.slice(0, 4);
+          const previewCards = references;
           const coverEntries = await loadCoverEntries(previewCards);
           const previewCover =
             coverEntries.find(([, asset]) => asset !== null)?.[1] ?? null;
@@ -539,6 +576,102 @@ export default function ShootingPlanPage() {
     });
   }
 
+  function renderPlanFormFields() {
+    return (
+      <>
+        <label className="field">
+          <span>所属项目 *</span>
+          <select
+            value={form.project_id}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                project_id: event.target.value,
+              }))
+            }
+          >
+            <option value="">选择项目</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span>标题 *</span>
+          <input
+            value={form.title}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, title: event.target.value }))
+            }
+            placeholder="例如：咖啡馆人像拍摄计划"
+          />
+        </label>
+
+        <label className="field">
+          <span>风格主题</span>
+          <textarea
+            value={form.shooting_theme}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                shooting_theme: event.target.value,
+              }))
+            }
+            rows={2}
+          />
+        </label>
+
+        <label className="field">
+          <span>器材</span>
+          <textarea
+            value={form.gear_list}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                gear_list: event.target.value,
+              }))
+            }
+            rows={3}
+          />
+        </label>
+
+        <label className="field">
+          <span>策划概述</span>
+          <textarea
+            value={form.notes}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, notes: event.target.value }))
+            }
+            rows={5}
+            placeholder="姿势、构图、光线、后期等都可以写在这里"
+          />
+        </label>
+
+        <label className="field">
+          <span>状态</span>
+          <select
+            value={form.status}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                status: event.target.value as ShootingPlanStatus,
+              }))
+            }
+          >
+            {statuses.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </>
+    );
+  }
+
   return (
     <section className="page-frame">
       <header className="page-header">
@@ -549,197 +682,12 @@ export default function ShootingPlanPage() {
         </p>
       </header>
 
-      <div className="crud-layout">
-        <form className="form-panel sticky-form-panel" onSubmit={handleSubmit}>
-          <div className="section-heading">
-            <h2>{isEditing ? "编辑拍摄计划" : "新建拍摄计划"}</h2>
-            {isEditing && (
-              <button className="text-button" type="button" onClick={resetForm}>
-                取消编辑
-              </button>
-            )}
-          </div>
-
-          <label className="field">
-            <span>所属项目 *</span>
-            <select
-              value={form.project_id}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  project_id: event.target.value,
-                }))
-              }
-            >
-              <option value="">选择项目</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span>标题 *</span>
-            <input
-              value={form.title}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, title: event.target.value }))
-              }
-              placeholder="例如：咖啡馆人像拍摄计划"
-            />
-          </label>
-
-          <label className="field">
-            <span>拍摄主题</span>
-            <textarea
-              value={form.shooting_theme}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  shooting_theme: event.target.value,
-                }))
-              }
-              rows={2}
-            />
-          </label>
-
-          <label className="field">
-            <span>器材清单</span>
-            <textarea
-              value={form.gear_list}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  gear_list: event.target.value,
-                }))
-              }
-              rows={3}
-            />
-          </label>
-
-          <label className="field">
-            <span>场景清单</span>
-            <textarea
-              value={form.scene_list}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  scene_list: event.target.value,
-                }))
-              }
-              rows={3}
-            />
-          </label>
-
-          <label className="field">
-            <span>动作 / 姿态清单</span>
-            <textarea
-              value={form.action_list}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  action_list: event.target.value,
-                }))
-              }
-              rows={3}
-            />
-          </label>
-
-          <label className="field">
-            <span>构图参考</span>
-            <textarea
-              value={form.composition_reference}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  composition_reference: event.target.value,
-                }))
-              }
-              rows={2}
-            />
-          </label>
-
-          <label className="field">
-            <span>光线参考</span>
-            <textarea
-              value={form.lighting_reference}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  lighting_reference: event.target.value,
-                }))
-              }
-              rows={2}
-            />
-          </label>
-
-          <label className="field">
-            <span>后期风格</span>
-            <textarea
-              value={form.post_style}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  post_style: event.target.value,
-                }))
-              }
-              rows={2}
-            />
-          </label>
-
-          <label className="field">
-            <span>技术备注</span>
-            <textarea
-              value={form.technique_notes}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  technique_notes: event.target.value,
-                }))
-              }
-              rows={2}
-            />
-          </label>
-
-          <label className="field">
-            <span>其他备注</span>
-            <textarea
-              value={form.notes}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, notes: event.target.value }))
-              }
-              rows={3}
-            />
-          </label>
-
-          <label className="field">
-            <span>状态</span>
-            <select
-              value={form.status}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  status: event.target.value as ShootingPlanStatus,
-                }))
-              }
-            >
-              {statuses.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button className="primary-button" disabled={isSaving} type="submit">
-            {isSaving ? "保存中..." : submitLabel}
+      <section className="plans-workspace">
+        <div className="plans-toolbar">
+          <button className="primary-button new-plan-button" type="button" onClick={openNewPlanModal}>
+            + New Plan
           </button>
-        </form>
-
-        <section className="list-panel">
-          <form className="search-filter-panel" onSubmit={handleFilter}>
+          <form className="search-filter-panel plans-filter-panel" onSubmit={handleFilter}>
             <div className="filter-panel-title">
               <strong>筛选拍摄计划</strong>
               <span>{plans.length} 个匹配计划</span>
@@ -754,7 +702,7 @@ export default function ShootingPlanPage() {
                     keyword: event.target.value,
                   }))
                 }
-                placeholder="搜索标题 / 主题 / 器材 / 场景 / 动作 / 备注..."
+                placeholder="搜索标题 / 主题 / 器材 / 策划概述..."
               />
               <select
                 className="search-filter-select"
@@ -804,16 +752,17 @@ export default function ShootingPlanPage() {
               </div>
             </div>
           </form>
+        </div>
 
-          {isLoading ? (
-            <p className="muted-text">正在加载拍摄计划...</p>
-          ) : plans.length === 0 ? (
-            <p className="empty-message">
-              暂无拍摄计划。先选择项目并创建一个计划吧。
-            </p>
-          ) : (
-            <div className="entity-list">
-              {plans.map((plan) => {
+        {isLoading ? (
+          <p className="muted-text">正在加载拍摄计划...</p>
+        ) : plans.length === 0 ? (
+          <p className="empty-message">
+            暂无拍摄计划。点击 New Plan 创建第一个计划。
+          </p>
+        ) : (
+          <div className="plan-card-wall">
+            {plans.map((plan) => {
                 const preview = planReferencePreviewMap[plan.id] ?? {
                   cards: [],
                   total: 0,
@@ -831,6 +780,15 @@ export default function ShootingPlanPage() {
                         : ""
                     }`}
                     key={plan.id}
+                    onClick={() => openPlanDetail(plan)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openPlanDetail(plan);
+                      }
+                    }}
                   >
                     {hasCover && (
                       <img
@@ -875,54 +833,174 @@ export default function ShootingPlanPage() {
                         onBroken={markCoverBroken}
                         preview={preview}
                       />
-
-                      <div className="row-actions">
-                        <button type="button" onClick={() => handleEdit(plan)}>
-                          编辑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => managePlanInspirations(plan)}
-                        >
-                          管理参考灵感
-                        </button>
-                        <button
-                          className="danger-button"
-                          type="button"
-                          onClick={() => requestDeletePlan(plan)}
-                        >
-                          删除
-                        </button>
-                      </div>
-
-                      {pendingDeletePlan?.id === plan.id && (
-                        <div className="inline-confirm">
-                          <p>确定删除拍摄计划「{plan.title}」吗？</p>
-                          <div className="row-actions">
-                            <button
-                              className="danger-button"
-                              type="button"
-                              onClick={() => void confirmDeletePlan()}
-                            >
-                              确认删除
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPendingDeletePlan(null)}
-                            >
-                              取消
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </article>
                 );
               })}
+          </div>
+        )}
+      </section>
+
+      {isPlanFormModalOpen && (
+        <div className="reference-modal-overlay" role="presentation">
+          <section
+            aria-labelledby="plan-form-modal-title"
+            aria-modal="true"
+            className="plan-modal"
+            role="dialog"
+          >
+            <header className="reference-modal-header">
+              <div>
+                <p className="page-kicker">New Plan</p>
+                <h2 id="plan-form-modal-title">新建 Plan</h2>
+                <p className="muted-text">先保存 Plan，再在详情窗口中添加参考灵感。</p>
+              </div>
+              <button
+                className="reference-modal-close"
+                type="button"
+                onClick={closeNewPlanModal}
+              >
+                关闭
+              </button>
+            </header>
+            <form className="plan-modal-body" onSubmit={handleSubmit}>
+              {renderPlanFormFields()}
+              <button className="primary-button" disabled={isSaving} type="submit">
+                {isSaving ? "保存中..." : "创建 Plan"}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {selectedPlanForDetail && (
+        <div className="reference-modal-overlay" role="presentation">
+          <section
+            aria-labelledby="plan-detail-modal-title"
+            aria-modal="true"
+            className="plan-modal plan-detail-modal"
+            role="dialog"
+          >
+            <header className="reference-modal-header">
+              <div>
+                <p className="page-kicker">Plan Detail</p>
+                <h2 id="plan-detail-modal-title">{selectedPlanForDetail.title}</h2>
+                <p className="muted-text">
+                  {selectedPlanForDetail.project_name ?? "未知项目"} ·{" "}
+                  {statusLabel(selectedPlanForDetail.status)}
+                </p>
+              </div>
+              <button
+                className="reference-modal-close"
+                type="button"
+                onClick={closePlanDetail}
+              >
+                关闭
+              </button>
+            </header>
+
+            <div className="plan-modal-body">
+              {isPlanDetailEditing ? (
+                <form className="plan-detail-edit-form" onSubmit={handleSubmit}>
+                  {renderPlanFormFields()}
+                  <div className="row-actions">
+                    <button className="primary-button" disabled={isSaving} type="submit">
+                      {isSaving ? "保存中..." : "保存修改"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPlanDetailEditing(false);
+                        resetForm();
+                      }}
+                    >
+                      取消编辑
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="plan-detail-summary">
+                    <div>
+                      <span>风格主题</span>
+                      <p>{selectedPlanForDetail.shooting_theme || "-"}</p>
+                    </div>
+                    <div>
+                      <span>器材</span>
+                      <p>{selectedPlanForDetail.gear_list || "-"}</p>
+                    </div>
+                    <div>
+                      <span>策划概述</span>
+                      <p>{selectedPlanForDetail.notes || "-"}</p>
+                    </div>
+                  </div>
+
+                  <section className="plan-detail-references">
+                    <div className="reference-section-title">
+                      <div>
+                        <h3>参考灵感</h3>
+                        <p className="muted-text">当前 Plan 已选择的参考内容。</p>
+                      </div>
+                    </div>
+                    <PlanReferencePreviewList
+                      brokenCoverIds={brokenCoverIds}
+                      inspirationCoverMap={inspirationCoverMap}
+                      onBroken={markCoverBroken}
+                      preview={
+                        planReferencePreviewMap[selectedPlanForDetail.id] ?? {
+                          cards: [],
+                          total: 0,
+                        }
+                      }
+                    />
+                  </section>
+
+                  <div className="plan-detail-actions">
+                    <button type="button" onClick={() => handleEdit(selectedPlanForDetail)}>
+                      编辑
+                    </button>
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => managePlanInspirations(selectedPlanForDetail)}
+                    >
+                      添加 / 管理参考灵感
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() => requestDeletePlan(selectedPlanForDetail)}
+                    >
+                      删除 Plan
+                    </button>
+                  </div>
+
+                  {pendingDeletePlan?.id === selectedPlanForDetail.id && (
+                    <div className="inline-confirm">
+                      <p>确定删除拍摄计划「{selectedPlanForDetail.title}」吗？</p>
+                      <div className="row-actions">
+                        <button
+                          className="danger-button"
+                          type="button"
+                          onClick={() => void confirmDeletePlan()}
+                        >
+                          确认删除
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeletePlan(null)}
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          )}
-        </section>
-      </div>
+          </section>
+        </div>
+      )}
 
       {isReferenceModalOpen && activeReferencePlan && (
         <div className="reference-modal-overlay" role="presentation">
@@ -1247,8 +1325,6 @@ function PlanReferencePreviewList({
     return <p className="plan-reference-empty">暂无参考灵感</p>;
   }
 
-  const remainingCount = Math.max(0, preview.total - preview.cards.length);
-
   return (
     <div className="plan-reference-preview-list">
       {preview.cards.map((card) => {
@@ -1270,9 +1346,6 @@ function PlanReferencePreviewList({
           </div>
         );
       })}
-      {remainingCount > 0 && (
-        <div className="plan-reference-more">+{remainingCount}</div>
-      )}
     </div>
   );
 }
