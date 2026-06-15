@@ -133,7 +133,11 @@ export default function ShootingPlanPage() {
     useState<ShootingPlan | null>(null);
   const [isPlanDetailEditing, setIsPlanDetailEditing] = useState(false);
   const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
-  const [expandedInspirationId, setExpandedInspirationId] = useState<string | null>(null);
+  const [detailInspiration, setDetailInspiration] = useState<InspirationCard | null>(null);
+  const [inspirationMediaMap, setInspirationMediaMap] = useState<
+    Record<string, MediaAsset[]>
+  >({});
+  const [brokenDetailImageIds, setBrokenDetailImageIds] = useState<Set<string>>(new Set());
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [pendingDeletePlan, setPendingDeletePlan] =
     useState<ShootingPlan | null>(null);
@@ -205,43 +209,19 @@ export default function ShootingPlanPage() {
       let savedPlan: ShootingPlan;
       if (editingPlanId) {
         savedPlan = await updateShootingPlan(editingPlanId, payload);
+        savedPlan = await importSelectedPlanImageForPlan(savedPlan);
         setSelectedPlanForDetail(savedPlan);
         setIsPlanDetailEditing(false);
       } else {
         savedPlan = await createShootingPlan(payload);
-        if (selectedPlanImagePath) {
-          try {
-            setPlanImageStatus("正在导入 Plan 参考图...");
-            const imported = await importShootingPlanImage(
-              selectedPlanImagePath,
-              savedPlan.id,
-              setSelectedPlanImageAsCover,
-            );
-            if (setSelectedPlanImageAsCover) {
-              savedPlan = {
-                ...savedPlan,
-                cover_media_asset_id: imported.id,
-              };
-              setPlanCoverMap((current) => ({
-                ...current,
-                [savedPlan.id]: imported,
-              }));
-            }
-            setPlanImageStatus("Plan 参考图已导入");
-          } catch (imageError) {
-            console.error("导入 Plan 参考图失败", imageError);
-            const message = toErrorMessage(imageError, "导入 Plan 参考图失败");
-            setPlanImageStatus(message);
-            alert(message);
-          }
-        }
+        savedPlan = await importSelectedPlanImageForPlan(savedPlan);
         setIsPlanFormModalOpen(false);
         setSelectedPlanForDetail(savedPlan);
         setIsPlanDetailEditing(false);
-        clearSelectedPlanImage();
       }
 
       resetForm();
+      clearSelectedPlanImage();
       await loadPlans();
     } catch (error) {
       alert(toErrorMessage(error, isEditing ? "编辑拍摄计划失败" : "创建拍摄计划失败"));
@@ -250,10 +230,53 @@ export default function ShootingPlanPage() {
     }
   }
 
+  async function importSelectedPlanImageForPlan(plan: ShootingPlan): Promise<ShootingPlan> {
+    if (!selectedPlanImagePath) {
+      return plan;
+    }
+
+    try {
+      setPlanImageStatus("正在导入 Plan 参考图...");
+      const imported = await importShootingPlanImage(
+        selectedPlanImagePath,
+        plan.id,
+        setSelectedPlanImageAsCover,
+      );
+
+      if (!setSelectedPlanImageAsCover) {
+        setPlanImageStatus("Plan 参考图已导入");
+        return plan;
+      }
+
+      const updatedPlan = {
+        ...plan,
+        cover_media_asset_id: imported.id,
+      };
+      setPlanCoverMap((current) => ({
+        ...current,
+        [plan.id]: imported,
+      }));
+      setBrokenPlanCoverIds((current) => {
+        const next = new Set(current);
+        next.delete(plan.id);
+        return next;
+      });
+      setPlanImageStatus("Plan 参考图已导入并设为封面");
+      return updatedPlan;
+    } catch (imageError) {
+      console.error("导入 Plan 参考图失败", imageError);
+      const message = toErrorMessage(imageError, "导入 Plan 参考图失败");
+      setPlanImageStatus(message);
+      alert(message);
+      return plan;
+    }
+  }
+
   function handleEdit(plan: ShootingPlan) {
     setEditingPlanId(plan.id);
     setIsPlanDetailEditing(true);
     setPendingDeletePlan(null);
+    clearSelectedPlanImage();
     setForm({
       project_id: plan.project_id,
       title: plan.title,
@@ -330,6 +353,33 @@ export default function ShootingPlanPage() {
     setPlanImageStatus("");
   }
 
+  async function openInspirationDetail(card: InspirationCard) {
+    setDetailInspiration(card);
+    setBrokenDetailImageIds(new Set());
+
+    if (inspirationMediaMap[card.id]) {
+      return;
+    }
+
+    try {
+      const media = await listMediaAssetsByTarget("inspiration", card.id);
+      setInspirationMediaMap((current) => ({
+        ...current,
+        [card.id]: media,
+      }));
+    } catch (error) {
+      console.error("加载灵感详情图片失败", { cardId: card.id, error });
+      setInspirationMediaMap((current) => ({
+        ...current,
+        [card.id]: [],
+      }));
+    }
+  }
+
+  function closeInspirationDetail() {
+    setDetailInspiration(null);
+  }
+
   function openPlanDetail(plan: ShootingPlan) {
     setSelectedPlanForDetail(plan);
     setIsPlanDetailEditing(false);
@@ -394,19 +444,19 @@ export default function ShootingPlanPage() {
     setInspirationCoverMap({});
     setBrokenCoverIds(new Set());
     setInspirationFilters(emptyInspirationFilters);
-    setExpandedInspirationId(null);
+    setDetailInspiration(null);
   }
 
   function managePlanInspirations(plan: ShootingPlan) {
     setActiveReferencePlanId(plan.id);
     setIsReferenceModalOpen(true);
-    setExpandedInspirationId(null);
+    setDetailInspiration(null);
     void loadPlanReferences(plan.id, inspirationFilters);
   }
 
   function closeReferenceModal() {
     setIsReferenceModalOpen(false);
-    setExpandedInspirationId(null);
+    setDetailInspiration(null);
   }
 
   async function loadPlanReferences(
@@ -454,7 +504,7 @@ export default function ShootingPlanPage() {
     }
 
     try {
-      setExpandedInspirationId(null);
+      setDetailInspiration(null);
       await attachInspirationToShootingPlan(activeReferencePlanId, card.id);
       await loadPlanReferences(activeReferencePlanId);
       await loadPlanPreviews(plans);
@@ -469,7 +519,7 @@ export default function ShootingPlanPage() {
     }
 
     try {
-      setExpandedInspirationId(null);
+      setDetailInspiration(null);
       await detachInspirationFromShootingPlan(
         activeReferencePlanId,
         card.id,
@@ -751,6 +801,51 @@ export default function ShootingPlanPage() {
     );
   }
 
+  function renderPlanImagePicker() {
+    return (
+      <section className="plan-image-picker">
+        <div className="plan-image-picker-header">
+          <strong>Plan 参考图</strong>
+          <button type="button" onClick={() => void choosePlanImage()}>
+            {selectedPlanImagePath ? "更换图片" : "选择图片"}
+          </button>
+        </div>
+
+        {selectedPlanImagePath && (
+          <div className="plan-image-preview">
+            <img
+              src={convertFileSrc(selectedPlanImagePath)}
+              alt={selectedPlanImageName || "Plan 参考图"}
+              onError={(event) => {
+                console.error("plan selected image preview failed", {
+                  sourcePath: selectedPlanImagePath,
+                  displayUrl: event.currentTarget.src,
+                });
+              }}
+            />
+            <div>
+              <strong>{selectedPlanImageName || "已选择图片"}</strong>
+              <label className="check-row">
+                <input
+                  checked={setSelectedPlanImageAsCover}
+                  type="checkbox"
+                  onChange={(event) =>
+                    setSetSelectedPlanImageAsCover(event.target.checked)
+                  }
+                />
+                <span>设为 Plan 封面</span>
+              </label>
+              <button type="button" onClick={clearSelectedPlanImage}>
+                取消选择
+              </button>
+            </div>
+          </div>
+        )}
+        {planImageStatus && <p className="muted-text">{planImageStatus}</p>}
+      </section>
+    );
+  }
+
   return (
     <section className="page-frame">
       <header className="page-header">
@@ -944,51 +1039,7 @@ export default function ShootingPlanPage() {
             </header>
             <form className="plan-modal-body" onSubmit={handleSubmit}>
               {renderPlanFormFields()}
-              <section className="plan-image-picker">
-                <div className="section-heading">
-                  <div>
-                    <h2>Plan 参考图</h2>
-                    <p className="muted-text">可选 1 张本地图片，创建后保存到 Plan 媒体目录。</p>
-                  </div>
-                  <button type="button" onClick={() => void choosePlanImage()}>
-                    {selectedPlanImagePath ? "更换图片" : "选择图片"}
-                  </button>
-                </div>
-
-                {selectedPlanImagePath ? (
-                  <div className="plan-image-preview">
-                    <img
-                      src={convertFileSrc(selectedPlanImagePath)}
-                      alt={selectedPlanImageName || "Plan 参考图"}
-                      onError={(event) => {
-                        console.error("plan selected image preview failed", {
-                          sourcePath: selectedPlanImagePath,
-                          displayUrl: event.currentTarget.src,
-                        });
-                      }}
-                    />
-                    <div>
-                      <strong>{selectedPlanImageName || "已选择图片"}</strong>
-                      <label className="check-row">
-                        <input
-                          checked={setSelectedPlanImageAsCover}
-                          type="checkbox"
-                          onChange={(event) =>
-                            setSetSelectedPlanImageAsCover(event.target.checked)
-                          }
-                        />
-                        <span>将此图设为 Plan 卡片背景</span>
-                      </label>
-                      <button type="button" onClick={clearSelectedPlanImage}>
-                        取消选择
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="muted-text">未选择图片，Plan 会使用普通背景或参考灵感图片 fallback。</p>
-                )}
-                {planImageStatus && <p className="muted-text">{planImageStatus}</p>}
-              </section>
+              {renderPlanImagePicker()}
               <button className="primary-button" disabled={isSaving} type="submit">
                 {isSaving ? "保存中..." : "创建 Plan"}
               </button>
@@ -1027,6 +1078,7 @@ export default function ShootingPlanPage() {
               {isPlanDetailEditing ? (
                 <form className="plan-detail-edit-form" onSubmit={handleSubmit}>
                   {renderPlanFormFields()}
+                  {renderPlanImagePicker()}
                   <div className="row-actions">
                     <button className="primary-button" disabled={isSaving} type="submit">
                       {isSaving ? "保存中..." : "保存修改"}
@@ -1068,11 +1120,9 @@ export default function ShootingPlanPage() {
                     </div>
                     <PlanDetailReferenceWall
                       brokenCoverIds={brokenCoverIds}
-                      expandedInspirationId={expandedInspirationId}
                       inspirationCoverMap={inspirationCoverMap}
                       onBroken={markCoverBroken}
-                      onCloseDetail={() => setExpandedInspirationId(null)}
-                      onOpenDetail={setExpandedInspirationId}
+                      onOpenDetail={openInspirationDetail}
                       preview={
                         planReferencePreviewMap[selectedPlanForDetail.id] ?? {
                           cards: [],
@@ -1183,7 +1233,7 @@ export default function ShootingPlanPage() {
                             className="reference-card reference-card--selected reference-card--clickable"
                             key={card.id}
                             onClick={() => void detachInspirationFromPlan(card)}
-                            title="点击取消选择"
+                            title="取消选择"
                           >
                             <div className="reference-card-tools">
                               <button
@@ -1191,9 +1241,7 @@ export default function ShootingPlanPage() {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  setExpandedInspirationId((current) =>
-                                    current === card.id ? null : card.id,
-                                  );
+                                  void openInspirationDetail(card);
                                 }}
                               >
                                 详情
@@ -1230,21 +1278,12 @@ export default function ShootingPlanPage() {
                               </div>
                             </div>
                             <div className="reference-hover-preview">
-                              <strong>点击取消选择</strong>
+                              <strong>概述</strong>
                               <p>{card.notes || "暂无备注"}</p>
                               <span>
                                 {card.author_name ? `作者：${card.author_name}` : "作者未记录"}
                               </span>
                             </div>
-                            {expandedInspirationId === card.id && (
-                              <InspirationDetailPopover
-                                card={card}
-                                cover={inspirationCoverMap[card.id] ?? null}
-                                isBroken={brokenCoverIds.has(card.id)}
-                                onBroken={() => markCoverBroken(card.id)}
-                                onClose={() => setExpandedInspirationId(null)}
-                              />
-                            )}
                           </article>
                         ))}
                       </div>
@@ -1313,7 +1352,7 @@ export default function ShootingPlanPage() {
                             className="reference-card reference-card--wall reference-card--clickable"
                             key={card.id}
                             onClick={() => void addInspirationToPlan(card)}
-                            title="点击加入计划"
+                            title="加入计划"
                           >
                             <div className="reference-card-tools">
                               <button
@@ -1321,9 +1360,7 @@ export default function ShootingPlanPage() {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  setExpandedInspirationId((current) =>
-                                    current === card.id ? null : card.id,
-                                  );
+                                  void openInspirationDetail(card);
                                 }}
                               >
                                 详情
@@ -1350,21 +1387,12 @@ export default function ShootingPlanPage() {
                               </div>
                             </div>
                             <div className="reference-hover-preview">
-                              <strong>点击加入计划</strong>
+                              <strong>概述</strong>
                               <p>{card.notes || "暂无备注"}</p>
                               <span>
                                 {card.author_name ? `作者：${card.author_name}` : "作者未记录"}
                               </span>
                             </div>
-                            {expandedInspirationId === card.id && (
-                              <InspirationDetailPopover
-                                card={card}
-                                cover={inspirationCoverMap[card.id] ?? null}
-                                isBroken={brokenCoverIds.has(card.id)}
-                                onBroken={() => markCoverBroken(card.id)}
-                                onClose={() => setExpandedInspirationId(null)}
-                              />
-                            )}
                           </article>
                         ))}
                       </div>
@@ -1375,6 +1403,22 @@ export default function ShootingPlanPage() {
             </div>
           </section>
         </div>
+      )}
+
+      {detailInspiration && (
+        <InspirationDetailModal
+          brokenImageIds={brokenDetailImageIds}
+          card={detailInspiration}
+          mediaAssets={inspirationMediaMap[detailInspiration.id] ?? []}
+          onClose={closeInspirationDetail}
+          onImageBroken={(assetId) =>
+            setBrokenDetailImageIds((current) => {
+              const next = new Set(current);
+              next.add(assetId);
+              return next;
+            })
+          }
+        />
       )}
     </section>
   );
@@ -1481,17 +1525,13 @@ function PlanDetailReferenceWall({
   preview,
   inspirationCoverMap,
   brokenCoverIds,
-  expandedInspirationId,
   onOpenDetail,
-  onCloseDetail,
   onBroken,
 }: {
   preview: PlanReferencePreview;
   inspirationCoverMap: Record<string, MediaAsset | null>;
   brokenCoverIds: Set<string>;
-  expandedInspirationId: string | null;
-  onOpenDetail: (cardId: string | null) => void;
-  onCloseDetail: () => void;
+  onOpenDetail: (card: InspirationCard) => void;
   onBroken: (cardId: string) => void;
 }) {
   if (preview.cards.length === 0) {
@@ -1504,10 +1544,8 @@ function PlanDetailReferenceWall({
         <article
           className="reference-card reference-card--wall reference-card--clickable"
           key={card.id}
-          onClick={() =>
-            onOpenDetail(expandedInspirationId === card.id ? null : card.id)
-          }
-          title="点击查看详情"
+          onClick={() => void onOpenDetail(card)}
+          title="查看详情"
         >
           <InspirationCover
             asset={inspirationCoverMap[card.id] ?? null}
@@ -1530,85 +1568,117 @@ function PlanDetailReferenceWall({
             </div>
           </div>
           <div className="reference-hover-preview">
-            <strong>点击查看详情</strong>
+            <strong>概述</strong>
             <p>{card.notes || "暂无备注"}</p>
             <span>
               {card.author_name ? `作者：${card.author_name}` : "作者未记录"}
             </span>
           </div>
-          {expandedInspirationId === card.id && (
-            <InspirationDetailPopover
-              card={card}
-              cover={inspirationCoverMap[card.id] ?? null}
-              isBroken={brokenCoverIds.has(card.id)}
-              onBroken={() => onBroken(card.id)}
-              onClose={onCloseDetail}
-            />
-          )}
         </article>
       ))}
     </div>
   );
 }
 
-function InspirationDetailPopover({
+function InspirationDetailModal({
   card,
-  cover,
-  isBroken,
-  onBroken,
+  mediaAssets,
+  brokenImageIds,
+  onImageBroken,
   onClose,
 }: {
   card: InspirationCard;
-  cover: MediaAsset | null;
-  isBroken: boolean;
-  onBroken: () => void;
+  mediaAssets: MediaAsset[];
+  brokenImageIds: Set<string>;
+  onImageBroken: (assetId: string) => void;
   onClose: () => void;
 }) {
   return (
-    <div
-      className="reference-detail-popover"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="reference-detail-header">
-        <strong>{card.title}</strong>
-        <button type="button" onClick={onClose}>
-          关闭
-        </button>
-      </div>
-      <InspirationCover asset={cover} isBroken={isBroken} onBroken={onBroken} />
-      <dl className="reference-detail-meta">
-        <div>
-          <dt>平台</dt>
-          <dd>{platformLabel(card.source_platform)}</dd>
-        </div>
-        <div>
-          <dt>作者</dt>
-          <dd>{card.author_name || "-"}</dd>
-        </div>
-        <div>
-          <dt>链接</dt>
-          <dd>
-            {card.source_url ? (
-              <a href={card.source_url} rel="noreferrer" target="_blank">
-                {card.source_url}
-              </a>
+    <div className="reference-modal-overlay" role="presentation">
+      <section
+        aria-labelledby="inspiration-detail-modal-title"
+        aria-modal="true"
+        className="inspiration-detail-modal"
+        role="dialog"
+      >
+        <header className="reference-modal-header">
+          <div>
+            <p className="page-kicker">Inspiration Detail</p>
+            <h2 id="inspiration-detail-modal-title">{card.title}</h2>
+            <p className="muted-text">
+              {platformLabel(card.source_platform)}
+              {card.author_name ? ` · ${card.author_name}` : ""}
+            </p>
+          </div>
+          <button className="reference-modal-close" type="button" onClick={onClose}>
+            关闭
+          </button>
+        </header>
+
+        <div className="inspiration-detail-body">
+          <section className="inspiration-detail-images">
+            {mediaAssets.length === 0 ? (
+              <div className="inspiration-detail-image-placeholder">暂无图片</div>
             ) : (
-              "-"
+              mediaAssets.map((asset) => (
+                <div className="inspiration-detail-image" key={asset.id}>
+                  {brokenImageIds.has(asset.id) ? (
+                    <div className="inspiration-detail-image-placeholder">
+                      图片加载失败
+                    </div>
+                  ) : (
+                    <img
+                      src={getMediaAssetDisplayUrl(asset)}
+                      alt={asset.original_filename ?? card.title}
+                      onError={() => onImageBroken(asset.id)}
+                    />
+                  )}
+                </div>
+              ))
             )}
-          </dd>
+          </section>
+
+          <dl className="reference-detail-meta inspiration-detail-meta">
+            <div>
+              <dt>平台</dt>
+              <dd>{platformLabel(card.source_platform)}</dd>
+            </div>
+            <div>
+              <dt>作者</dt>
+              <dd>{card.author_name || "-"}</dd>
+            </div>
+            <div>
+              <dt>链接</dt>
+              <dd>
+                {card.source_url ? (
+                  <a href={card.source_url} rel="noreferrer" target="_blank">
+                    {card.source_url}
+                  </a>
+                ) : (
+                  "-"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>收藏时间</dt>
+              <dd>{card.collected_at || "-"}</dd>
+            </div>
+          </dl>
+
+          <div className="mini-tag-list">
+            {card.tags.map((tag) => (
+              <span className="mini-tag" key={tag.id}>
+                #{tag.name}
+              </span>
+            ))}
+          </div>
+
+          <div className="reference-detail-notes inspiration-detail-notes">
+            <h4>完整备注</h4>
+            <p>{card.notes || "暂无备注"}</p>
+          </div>
         </div>
-      </dl>
-      <div className="mini-tag-list">
-        {card.tags.map((tag) => (
-          <span className="mini-tag" key={tag.id}>
-            #{tag.name}
-          </span>
-        ))}
-      </div>
-      <div className="reference-detail-notes">
-        <h4>备注</h4>
-        <p>{card.notes || "暂无备注"}</p>
-      </div>
+      </section>
     </div>
   );
 }
