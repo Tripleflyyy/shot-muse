@@ -1,9 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 
 import { InspirationCard, SourcePlatform } from "../services/inspirationApi";
 import {
   getMediaAssetDisplayUrl,
   getMediaAsset,
+  importShootingPlanImage,
   listMediaAssetsByTarget,
   MediaAsset,
 } from "../services/mediaApi";
@@ -121,6 +124,11 @@ export default function ShootingPlanPage() {
   const [inspirationFilters, setInspirationFilters] =
     useState<PlanInspirationFilterState>(emptyInspirationFilters);
   const [isPlanFormModalOpen, setIsPlanFormModalOpen] = useState(false);
+  const [selectedPlanImagePath, setSelectedPlanImagePath] = useState("");
+  const [selectedPlanImageName, setSelectedPlanImageName] = useState("");
+  const [setSelectedPlanImageAsCover, setSetSelectedPlanImageAsCover] =
+    useState(true);
+  const [planImageStatus, setPlanImageStatus] = useState("");
   const [selectedPlanForDetail, setSelectedPlanForDetail] =
     useState<ShootingPlan | null>(null);
   const [isPlanDetailEditing, setIsPlanDetailEditing] = useState(false);
@@ -201,9 +209,36 @@ export default function ShootingPlanPage() {
         setIsPlanDetailEditing(false);
       } else {
         savedPlan = await createShootingPlan(payload);
+        if (selectedPlanImagePath) {
+          try {
+            setPlanImageStatus("正在导入 Plan 参考图...");
+            const imported = await importShootingPlanImage(
+              selectedPlanImagePath,
+              savedPlan.id,
+              setSelectedPlanImageAsCover,
+            );
+            if (setSelectedPlanImageAsCover) {
+              savedPlan = {
+                ...savedPlan,
+                cover_media_asset_id: imported.id,
+              };
+              setPlanCoverMap((current) => ({
+                ...current,
+                [savedPlan.id]: imported,
+              }));
+            }
+            setPlanImageStatus("Plan 参考图已导入");
+          } catch (imageError) {
+            console.error("导入 Plan 参考图失败", imageError);
+            const message = toErrorMessage(imageError, "导入 Plan 参考图失败");
+            setPlanImageStatus(message);
+            alert(message);
+          }
+        }
         setIsPlanFormModalOpen(false);
         setSelectedPlanForDetail(savedPlan);
         setIsPlanDetailEditing(false);
+        clearSelectedPlanImage();
       }
 
       resetForm();
@@ -241,6 +276,7 @@ export default function ShootingPlanPage() {
 
   function openNewPlanModal() {
     resetForm();
+    clearSelectedPlanImage();
     setSelectedPlanForDetail(null);
     setIsPlanDetailEditing(false);
     setIsPlanFormModalOpen(true);
@@ -248,7 +284,50 @@ export default function ShootingPlanPage() {
 
   function closeNewPlanModal() {
     setIsPlanFormModalOpen(false);
+    clearSelectedPlanImage();
     resetForm();
+  }
+
+  async function choosePlanImage() {
+    setPlanImageStatus("正在打开文件选择器...");
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Images",
+            extensions: ["jpg", "jpeg", "png", "webp"],
+          },
+        ],
+      });
+
+      if (!selected) {
+        setPlanImageStatus("已取消选择图片");
+        return;
+      }
+
+      const sourcePath = Array.isArray(selected) ? selected[0] : selected;
+      if (!sourcePath) {
+        setPlanImageStatus("未选择图片");
+        return;
+      }
+
+      setSelectedPlanImagePath(sourcePath);
+      setSelectedPlanImageName(fileNameFromPath(sourcePath));
+      setPlanImageStatus("已选择 Plan 参考图");
+    } catch (error) {
+      console.error("选择 Plan 参考图失败", error);
+      const message = toErrorMessage(error, "选择 Plan 参考图失败");
+      setPlanImageStatus(message);
+      alert(message);
+    }
+  }
+
+  function clearSelectedPlanImage() {
+    setSelectedPlanImagePath("");
+    setSelectedPlanImageName("");
+    setSetSelectedPlanImageAsCover(true);
+    setPlanImageStatus("");
   }
 
   function openPlanDetail(plan: ShootingPlan) {
@@ -865,6 +944,51 @@ export default function ShootingPlanPage() {
             </header>
             <form className="plan-modal-body" onSubmit={handleSubmit}>
               {renderPlanFormFields()}
+              <section className="plan-image-picker">
+                <div className="section-heading">
+                  <div>
+                    <h2>Plan 参考图</h2>
+                    <p className="muted-text">可选 1 张本地图片，创建后保存到 Plan 媒体目录。</p>
+                  </div>
+                  <button type="button" onClick={() => void choosePlanImage()}>
+                    {selectedPlanImagePath ? "更换图片" : "选择图片"}
+                  </button>
+                </div>
+
+                {selectedPlanImagePath ? (
+                  <div className="plan-image-preview">
+                    <img
+                      src={convertFileSrc(selectedPlanImagePath)}
+                      alt={selectedPlanImageName || "Plan 参考图"}
+                      onError={(event) => {
+                        console.error("plan selected image preview failed", {
+                          sourcePath: selectedPlanImagePath,
+                          displayUrl: event.currentTarget.src,
+                        });
+                      }}
+                    />
+                    <div>
+                      <strong>{selectedPlanImageName || "已选择图片"}</strong>
+                      <label className="check-row">
+                        <input
+                          checked={setSelectedPlanImageAsCover}
+                          type="checkbox"
+                          onChange={(event) =>
+                            setSetSelectedPlanImageAsCover(event.target.checked)
+                          }
+                        />
+                        <span>将此图设为 Plan 卡片背景</span>
+                      </label>
+                      <button type="button" onClick={clearSelectedPlanImage}>
+                        取消选择
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="muted-text">未选择图片，Plan 会使用普通背景或参考灵感图片 fallback。</p>
+                )}
+                {planImageStatus && <p className="muted-text">{planImageStatus}</p>}
+              </section>
               <button className="primary-button" disabled={isSaving} type="submit">
                 {isSaving ? "保存中..." : "创建 Plan"}
               </button>
@@ -942,10 +1066,13 @@ export default function ShootingPlanPage() {
                         <p className="muted-text">当前 Plan 已选择的参考内容。</p>
                       </div>
                     </div>
-                    <PlanReferencePreviewList
+                    <PlanDetailReferenceWall
                       brokenCoverIds={brokenCoverIds}
+                      expandedInspirationId={expandedInspirationId}
                       inspirationCoverMap={inspirationCoverMap}
                       onBroken={markCoverBroken}
+                      onCloseDetail={() => setExpandedInspirationId(null)}
+                      onOpenDetail={setExpandedInspirationId}
                       preview={
                         planReferencePreviewMap[selectedPlanForDetail.id] ?? {
                           cards: [],
@@ -1350,6 +1477,80 @@ function PlanReferencePreviewList({
   );
 }
 
+function PlanDetailReferenceWall({
+  preview,
+  inspirationCoverMap,
+  brokenCoverIds,
+  expandedInspirationId,
+  onOpenDetail,
+  onCloseDetail,
+  onBroken,
+}: {
+  preview: PlanReferencePreview;
+  inspirationCoverMap: Record<string, MediaAsset | null>;
+  brokenCoverIds: Set<string>;
+  expandedInspirationId: string | null;
+  onOpenDetail: (cardId: string | null) => void;
+  onCloseDetail: () => void;
+  onBroken: (cardId: string) => void;
+}) {
+  if (preview.cards.length === 0) {
+    return <p className="empty-message">当前 Plan 还没有参考灵感。</p>;
+  }
+
+  return (
+    <div className="plan-detail-reference-wall">
+      {preview.cards.map((card) => (
+        <article
+          className="reference-card reference-card--wall reference-card--clickable"
+          key={card.id}
+          onClick={() =>
+            onOpenDetail(expandedInspirationId === card.id ? null : card.id)
+          }
+          title="点击查看详情"
+        >
+          <InspirationCover
+            asset={inspirationCoverMap[card.id] ?? null}
+            isBroken={brokenCoverIds.has(card.id)}
+            onBroken={() => onBroken(card.id)}
+          />
+          <div className="reference-card-body">
+            <strong>{card.title}</strong>
+            <p>
+              {platformLabel(card.source_platform)}
+              {card.author_name ? ` · ${card.author_name}` : ""}
+            </p>
+            {card.notes && <p className="note-text">{card.notes}</p>}
+            <div className="mini-tag-list">
+              {card.tags.map((tag) => (
+                <span className="mini-tag" key={tag.id}>
+                  #{tag.name}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="reference-hover-preview">
+            <strong>点击查看详情</strong>
+            <p>{card.notes || "暂无备注"}</p>
+            <span>
+              {card.author_name ? `作者：${card.author_name}` : "作者未记录"}
+            </span>
+          </div>
+          {expandedInspirationId === card.id && (
+            <InspirationDetailPopover
+              card={card}
+              cover={inspirationCoverMap[card.id] ?? null}
+              isBroken={brokenCoverIds.has(card.id)}
+              onBroken={() => onBroken(card.id)}
+              onClose={onCloseDetail}
+            />
+          )}
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function InspirationDetailPopover({
   card,
   cover,
@@ -1415,6 +1616,10 @@ function InspirationDetailPopover({
 function optionalText(value: string): string | null {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function fileNameFromPath(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? "已选择图片";
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {

@@ -6,11 +6,17 @@ use crate::media::file_store;
 use crate::models::{
     MediaAsset, MediaAssetFilters, MediaAssetPayload, UpdateMediaAssetTargetPayload,
 };
-use crate::repositories::{inspiration_repository, media_repository};
+use crate::repositories::{inspiration_repository, media_repository, shooting_plan_repository};
 use crate::state::AppState;
 
-const VALID_TARGET_TYPES: &[&str] = &["inspiration", "technique", "project", "plan"];
-const VALID_SOURCE_TYPES: &[&str] = &["file_picker", "clipboard", "drag_drop"];
+const VALID_TARGET_TYPES: &[&str] = &[
+    "inspiration",
+    "technique",
+    "project",
+    "plan",
+    "shooting_plan",
+];
+const VALID_SOURCE_TYPES: &[&str] = &["file_picker", "clipboard", "drag_drop", "local"];
 
 #[tauri::command]
 pub fn create_media_asset(
@@ -133,6 +139,81 @@ pub fn import_local_image(
         target_type.trim(),
         target_id.trim(),
     )
+}
+
+#[tauri::command]
+pub fn import_shooting_plan_image(
+    state: State<'_, AppState>,
+    source_path: String,
+    shooting_plan_id: String,
+    set_as_cover: bool,
+) -> Result<MediaAsset, String> {
+    import_shooting_plan_image_with_paths(
+        &state,
+        Path::new(source_path.trim()),
+        shooting_plan_id.trim(),
+        set_as_cover,
+    )
+}
+
+fn import_shooting_plan_image_with_paths(
+    state: &AppState,
+    source_path: &Path,
+    shooting_plan_id: &str,
+    set_as_cover: bool,
+) -> Result<MediaAsset, String> {
+    if source_path.as_os_str().is_empty() {
+        return Err("源图片路径不能为空".to_string());
+    }
+
+    if shooting_plan_id.trim().is_empty() {
+        return Err("拍摄计划 ID 不能为空".to_string());
+    }
+
+    state
+        .with_connection(|connection| {
+            if !shooting_plan_repository::shooting_plan_exists(connection, shooting_plan_id)? {
+                return Err(validation_error("拍摄计划不存在"));
+            }
+            Ok(())
+        })
+        .map_err(command_error)?;
+
+    let stored_file = file_store::copy_local_image(
+        state.app_data_dir(),
+        source_path,
+        "shooting_plan",
+        shooting_plan_id,
+    )?;
+
+    let payload = MediaAssetPayload {
+        target_type: "shooting_plan".to_string(),
+        target_id: Some(shooting_plan_id.to_string()),
+        file_path: stored_file.file_path,
+        original_filename: stored_file.original_filename,
+        mime_type: stored_file.mime_type,
+        file_size: stored_file.file_size,
+        width: None,
+        height: None,
+        source_type: "local".to_string(),
+    };
+
+    let media_asset = state
+        .with_connection(|connection| {
+            let media_asset = media_repository::create_media_asset(connection, &payload)?;
+            if set_as_cover {
+                shooting_plan_repository::update_shooting_plan_cover(
+                    connection,
+                    shooting_plan_id,
+                    Some(media_asset.id.clone()),
+                )?
+                .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
+            }
+            Ok(media_asset)
+        })
+        .map_err(command_error)?;
+
+    Ok(media_asset)
 }
 
 fn import_local_image_with_paths(
@@ -279,8 +360,10 @@ mod tests {
 
     use super::*;
     use crate::db::migrations;
-    use crate::models::InspirationCardPayload;
-    use crate::repositories::inspiration_repository;
+    use crate::models::{InspirationCardPayload, ProjectPayload, ShootingPlanPayload};
+    use crate::repositories::{
+        inspiration_repository, project_repository, shooting_plan_repository,
+    };
 
     fn test_app_state() -> AppState {
         let app_data_dir = temp_dir("shot-muse-media-import-test");
@@ -312,6 +395,43 @@ mod tests {
                 )
             })
             .expect("create inspiration")
+            .id
+    }
+
+    fn create_shooting_plan(state: &AppState) -> String {
+        state
+            .with_connection(|connection| {
+                let project = project_repository::create_project(
+                    connection,
+                    &ProjectPayload {
+                        name: "测试拍摄项目".into(),
+                        theme: None,
+                        description: None,
+                        location: None,
+                        planned_shooting_time: None,
+                        notes: None,
+                    },
+                )?;
+
+                shooting_plan_repository::create_shooting_plan(
+                    connection,
+                    &ShootingPlanPayload {
+                        project_id: project.id,
+                        title: "测试拍摄计划".into(),
+                        shooting_theme: None,
+                        gear_list: None,
+                        scene_list: None,
+                        action_list: None,
+                        composition_reference: None,
+                        lighting_reference: None,
+                        post_style: None,
+                        technique_notes: None,
+                        notes: None,
+                        status: Some("draft".into()),
+                    },
+                )
+            })
+            .expect("create shooting plan")
             .id
     }
 
@@ -388,6 +508,86 @@ mod tests {
             &source_path,
             "inspiration",
             &inspiration_id,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn import_shooting_plan_image_creates_media_asset_and_sets_cover() {
+        let state = test_app_state();
+        let shooting_plan_id = create_shooting_plan(&state);
+        let source_dir = temp_dir("shot-muse-plan-image-test");
+        let source_path = source_dir.join("plan-cover.png");
+        write_fake_image(&source_path);
+
+        let imported =
+            import_shooting_plan_image_with_paths(&state, &source_path, &shooting_plan_id, true)
+                .expect("import shooting plan image");
+
+        assert_eq!(imported.target_type, "shooting_plan");
+        assert_eq!(imported.target_id.as_deref(), Some(shooting_plan_id.as_str()));
+        assert_eq!(imported.original_filename.as_deref(), Some("plan-cover.png"));
+        assert_eq!(imported.mime_type.as_deref(), Some("image/png"));
+        assert_eq!(imported.source_type, "local");
+        assert!(Path::new(&imported.file_path).exists());
+        assert!(imported
+            .file_path
+            .contains(&format!("media/shooting_plan/{shooting_plan_id}")));
+
+        let plan = state
+            .with_connection(|connection| {
+                shooting_plan_repository::get_shooting_plan(connection, &shooting_plan_id)
+            })
+            .expect("get shooting plan")
+            .expect("shooting plan exists");
+        assert_eq!(plan.cover_media_asset_id.as_deref(), Some(imported.id.as_str()));
+    }
+
+    #[test]
+    fn import_shooting_plan_image_can_skip_cover_update() {
+        let state = test_app_state();
+        let shooting_plan_id = create_shooting_plan(&state);
+        let source_dir = temp_dir("shot-muse-plan-image-no-cover-test");
+        let source_path = source_dir.join("plan-ref.webp");
+        write_fake_image(&source_path);
+
+        let imported =
+            import_shooting_plan_image_with_paths(&state, &source_path, &shooting_plan_id, false)
+                .expect("import shooting plan image");
+
+        assert_eq!(imported.target_type, "shooting_plan");
+        let plan = state
+            .with_connection(|connection| {
+                shooting_plan_repository::get_shooting_plan(connection, &shooting_plan_id)
+            })
+            .expect("get shooting plan")
+            .expect("shooting plan exists");
+        assert!(plan.cover_media_asset_id.is_none());
+    }
+
+    #[test]
+    fn import_shooting_plan_image_rejects_missing_plan_and_invalid_format() {
+        let state = test_app_state();
+        let source_dir = temp_dir("shot-muse-plan-image-invalid-test");
+        let source_path = source_dir.join("plan-cover.jpg");
+        write_fake_image(&source_path);
+
+        assert!(import_shooting_plan_image_with_paths(
+            &state,
+            &source_path,
+            "missing-plan",
+            true,
+        )
+        .is_err());
+
+        let shooting_plan_id = create_shooting_plan(&state);
+        let invalid_path = source_dir.join("plan-cover.gif");
+        fs::write(&invalid_path, b"gif").expect("write unsupported image");
+        assert!(import_shooting_plan_image_with_paths(
+            &state,
+            &invalid_path,
+            &shooting_plan_id,
+            true,
         )
         .is_err());
     }

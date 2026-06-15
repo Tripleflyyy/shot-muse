@@ -1,7 +1,12 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
-export type MediaTargetType = "inspiration" | "technique" | "project" | "plan";
-export type MediaSourceType = "file_picker" | "clipboard" | "drag_drop";
+export type MediaTargetType =
+  | "inspiration"
+  | "technique"
+  | "project"
+  | "plan"
+  | "shooting_plan";
+export type MediaSourceType = "file_picker" | "clipboard" | "drag_drop" | "local";
 
 export type MediaAsset = {
   id: string;
@@ -95,6 +100,18 @@ export async function importLocalImage(
     sourcePath,
     targetType,
     targetId,
+  });
+}
+
+export async function importShootingPlanImage(
+  sourcePath: string,
+  shootingPlanId: string,
+  setAsCover: boolean,
+): Promise<MediaAsset> {
+  return invoke<MediaAsset>("import_shooting_plan_image", {
+    sourcePath,
+    shootingPlanId,
+    setAsCover,
   });
 }
 

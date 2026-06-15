@@ -14,8 +14,9 @@ pub use inspiration_commands::{
     update_inspiration_card,
 };
 pub use media_commands::{
-    create_media_asset, delete_media_asset, get_media_asset, import_local_image, list_media_assets,
-    list_media_assets_by_target, update_media_asset_target,
+    create_media_asset, delete_media_asset, get_media_asset, import_local_image,
+    import_shooting_plan_image, list_media_assets, list_media_assets_by_target,
+    update_media_asset_target,
 };
 pub use project_commands::{
     create_project, delete_project, get_project, list_projects, update_project,
