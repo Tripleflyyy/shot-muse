@@ -36,13 +36,14 @@ Plan References
 - `media_assets`
 - `shooting_plans`
 - `shooting_plan_inspirations`
+- `inspiration_cards.card_type`
 
 演进目标层：
 
 - `Card Library` / `reference_cards` 概念成为核心资产层。
 - 通过 `card_type` 区分 `inspiration` / `technique`。
 - Plan references card library，支持 Plan 同时关联灵感卡和技巧卡。
-- 当前阶段继续沿用 `inspiration_cards`；后续可通过增加 `card_type` 或重构为 `reference_cards` 逐步演进。
+- 当前 P0-11 已在继续沿用 `inspiration_cards` 的前提下增加 `card_type`，支持 `inspiration` / `technique`。完整 `reference_cards` 重构仍是后续演进。
 
 ## 2. 产品模块划分
 
@@ -72,9 +73,9 @@ Plan References
 
 功能职责：统一管理灵感卡和技巧卡。底层规划为一个卡片库，通过 `card_type` 区分 `inspiration` / `technique`；界面可提供“全部 / 灵感 / 技巧”视图。
 
-主要页面：CardLibraryPage（演进目标）、InspirationLibraryPage（当前已实现灵感卡主页面）、TechniqueLibraryPage（后续）
+主要页面：InspirationLibraryPage（当前作为 Card Library 页面承载全部 / 灵感 / 技巧视图）。CardLibraryPage 文件名和 reference_cards 表属于后续演进。
 
-依赖的数据表：当前为 inspiration_cards、inspiration_card_tags、tags、media_assets；后续可能演进为 reference_cards 或在现有表增加 card_type。
+依赖的数据表：当前为 inspiration_cards、inspiration_card_tags、tags、media_assets，其中 `inspiration_cards.card_type` 区分灵感卡和技巧卡；后续可能演进为 reference_cards。
 
 依赖的 Tauri commands：当前为 create_inspiration_card、update_inspiration_card、delete_inspiration_card、get_inspiration_card、list_inspiration_cards、attach_tag_to_inspiration、detach_tag_from_inspiration、import_local_image、delete_media_asset；后续增加技巧卡和统一卡片 commands。
 

@@ -36,6 +36,7 @@ Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项
 - P0-08 本地图片导入：完成
 - P0-09 Shooting Plans 基础 CRUD：完成
 - P0-10 shooting_plan_inspirations 关联：代码已完成，前端体验待 P0-10.1 修复
+- P0-11 Card Library 统一改造：完成，当前沿用 `inspiration_cards` 并通过 `card_type` 支持灵感卡 / 技巧卡
 
 ## 新增后续计划
 
@@ -64,6 +65,8 @@ Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项
 优先级：P0
 
 任务目标：将 Inspiration Library 升级为 Card Library，统一灵感卡与技巧卡的资产入口。
+
+当前实现说明：P0-11 不重命名数据库表，不创建 `reference_cards`，继续沿用 `inspiration_cards`，通过新增 `card_type` 字段支持 `inspiration` / `technique`。
 
 输出：
 

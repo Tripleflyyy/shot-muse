@@ -13,6 +13,8 @@ const VALID_SOURCE_PLATFORMS: &[&str] = &[
     "other",
 ];
 
+const VALID_CARD_TYPES: &[&str] = &["inspiration", "technique"];
+
 #[tauri::command]
 pub fn create_inspiration_card(
     state: State<'_, AppState>,
@@ -89,6 +91,7 @@ pub fn list_inspiration_cards(
     filters: Option<InspirationCardFilters>,
 ) -> Result<Vec<InspirationCard>, String> {
     let filters = normalize_filters(filters.unwrap_or(InspirationCardFilters {
+        card_type: None,
         project_id: None,
         source_platform: None,
         keyword: None,
@@ -97,6 +100,10 @@ pub fn list_inspiration_cards(
 
     if let Some(source_platform) = filters.source_platform.as_deref() {
         validate_source_platform(source_platform)?;
+    }
+
+    if let Some(card_type) = filters.card_type.as_deref() {
+        validate_card_type_filter(card_type)?;
     }
 
     state
@@ -220,6 +227,7 @@ fn validate_payload_shape(payload: &InspirationCardPayload) -> Result<(), String
     }
 
     validate_source_platform(payload.source_platform.trim())?;
+    validate_card_type(payload.card_type.as_deref().unwrap_or("inspiration").trim())?;
     Ok(())
 }
 
@@ -293,8 +301,25 @@ fn validate_source_platform(source_platform: &str) -> Result<(), String> {
     }
 }
 
+fn validate_card_type(card_type: &str) -> Result<(), String> {
+    if VALID_CARD_TYPES.contains(&card_type) {
+        Ok(())
+    } else {
+        Err("卡片类型不合法".to_string())
+    }
+}
+
+fn validate_card_type_filter(card_type: &str) -> Result<(), String> {
+    if card_type == "all" {
+        Ok(())
+    } else {
+        validate_card_type(card_type)
+    }
+}
+
 fn normalize_payload(payload: InspirationCardPayload) -> InspirationCardPayload {
     InspirationCardPayload {
+        card_type: Some(normalize_card_type(payload.card_type)),
         title: payload.title.trim().to_string(),
         source_platform: payload.source_platform.trim().to_string(),
         source_url: normalize_optional_string(payload.source_url),
@@ -308,10 +333,22 @@ fn normalize_payload(payload: InspirationCardPayload) -> InspirationCardPayload 
 
 fn normalize_filters(filters: InspirationCardFilters) -> InspirationCardFilters {
     InspirationCardFilters {
+        card_type: normalize_card_type_filter(filters.card_type),
         project_id: normalize_optional_string(filters.project_id),
         source_platform: normalize_optional_string(filters.source_platform),
         keyword: normalize_optional_string(filters.keyword),
         tag_ids: Some(normalized_ids(filters.tag_ids.as_deref().unwrap_or(&[]))),
+    }
+}
+
+fn normalize_card_type(value: Option<String>) -> String {
+    normalize_optional_string(value).unwrap_or_else(|| "inspiration".to_string())
+}
+
+fn normalize_card_type_filter(value: Option<String>) -> Option<String> {
+    match normalize_optional_string(value) {
+        Some(value) if value == "all" => None,
+        value => value,
     }
 }
 
@@ -356,4 +393,34 @@ fn database_error(error: rusqlite::Error) -> String {
 
 fn validation_error(message: &str) -> rusqlite::Error {
     rusqlite::Error::InvalidParameterName(message.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_payload() -> InspirationCardPayload {
+        InspirationCardPayload {
+            card_type: Some("inspiration".into()),
+            title: "测试卡片".into(),
+            source_platform: "xiaohongshu".into(),
+            source_url: None,
+            author_name: None,
+            notes: None,
+            project_id: None,
+            collected_at: None,
+            tag_ids: Some(vec![]),
+        }
+    }
+
+    #[test]
+    fn validation_rejects_invalid_card_type() {
+        let mut payload = valid_payload();
+        payload.card_type = Some("reference".into());
+
+        assert_eq!(
+            validate_payload_shape(&payload),
+            Err("卡片类型不合法".to_string())
+        );
+    }
 }

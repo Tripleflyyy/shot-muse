@@ -27,9 +27,9 @@
 
 1. Card Library 统一卡片库
 
-当前 `inspiration_cards` 后续可能演进为 `reference_cards`，或在现有卡片表上增加 `card_type` 字段。
+当前 P0-11 实现选择低风险路径：继续沿用 `inspiration_cards` 表名，并在现有卡片表上增加 `card_type` 字段。完整 `reference_cards` 重构仍是后续演进，不是当前阶段。
 
-`card_type` 计划值：
+`card_type` 当前允许值：
 
 - inspiration
 - technique
@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS projects (
 ```sql
 CREATE TABLE IF NOT EXISTS inspiration_cards (
   id TEXT PRIMARY KEY,
+  card_type TEXT NOT NULL DEFAULT 'inspiration',
   title TEXT NOT NULL,
   source_platform TEXT NOT NULL,
   source_url TEXT,
@@ -99,6 +100,13 @@ source_platform 建议值：
 - youtube
 - instagram
 - other
+
+card_type 当前允许值：
+
+- inspiration
+- technique
+
+说明：历史卡片默认 `inspiration`。P0-11 后，卡片库页面通过该字段提供“全部 / 灵感 / 技巧”视图；当前仍不重命名 `inspiration_cards`。
 
 ## 4. technique_cards 表
 
@@ -306,6 +314,9 @@ ON inspiration_cards(project_id);
 
 CREATE INDEX IF NOT EXISTS idx_inspiration_cards_source_platform
 ON inspiration_cards(source_platform);
+
+CREATE INDEX IF NOT EXISTS idx_inspiration_cards_card_type
+ON inspiration_cards(card_type);
 
 CREATE INDEX IF NOT EXISTS idx_inspiration_cards_collected_at
 ON inspiration_cards(collected_at);

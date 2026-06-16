@@ -16,9 +16,9 @@ export const navItems: NavItem[] = [
     description: "整理摄影项目和主题",
   },
   {
-    label: "Inspiration",
+    label: "Card Library",
     path: "/inspiration",
-    description: "保存作品链接、截图和备注",
+    description: "管理灵感卡和技巧卡",
   },
   {
     label: "Tags",

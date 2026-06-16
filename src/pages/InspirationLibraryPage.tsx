@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 
 import {
   createInspirationCard,
+  CardType,
   deleteInspirationCard,
   InspirationCard,
   InspirationCardPayload,
@@ -20,6 +21,7 @@ import {
 import { listTags, Tag, TagCategory } from "../services/tagApi";
 
 type InspirationFormState = {
+  card_type: CardType;
   title: string;
   source_platform: SourcePlatform;
   source_url: string;
@@ -29,6 +31,7 @@ type InspirationFormState = {
 };
 
 type InspirationFiltersState = {
+  card_type: "all" | CardType;
   source_platform: "" | SourcePlatform;
   keyword: string;
 };
@@ -43,6 +46,7 @@ const sourcePlatforms: Array<{ value: SourcePlatform; label: string }> = [
 ];
 
 const emptyForm: InspirationFormState = {
+  card_type: "inspiration",
   title: "",
   source_platform: "xiaohongshu",
   source_url: "",
@@ -52,9 +56,29 @@ const emptyForm: InspirationFormState = {
 };
 
 const emptyFilters: InspirationFiltersState = {
+  card_type: "all",
   source_platform: "",
   keyword: "",
 };
+
+const cardTypes: Array<{ value: CardType; label: string; hint: string }> = [
+  {
+    value: "inspiration",
+    label: "灵感",
+    hint: "记录画面参考、风格、构图、色彩与情绪",
+  },
+  {
+    value: "technique",
+    label: "技巧",
+    hint: "记录拍摄方法、操作步骤、布光与后期方法",
+  },
+];
+
+const cardTypeTabs: Array<{ value: "all" | CardType; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "inspiration", label: "灵感" },
+  { value: "technique", label: "技巧" },
+];
 
 const tagCategories: Array<{ value: TagCategory; label: string }> = [
   { value: "subject", label: "主体" },
@@ -115,6 +139,7 @@ export default function InspirationLibraryPage() {
     setIsLoading(true);
     try {
       const data = await listInspirationCards({
+        card_type: nextFilters.card_type === "all" ? null : nextFilters.card_type,
         source_platform: nextFilters.source_platform || null,
         keyword: optionalText(nextFilters.keyword),
         tag_ids: [],
@@ -122,7 +147,7 @@ export default function InspirationLibraryPage() {
       setCards(data);
       await loadMediaForCards(data);
     } catch (error) {
-      alert(toErrorMessage(error, "加载灵感卡片失败"));
+      alert(toErrorMessage(error, "加载卡片失败"));
     } finally {
       setIsLoading(false);
     }
@@ -143,8 +168,8 @@ export default function InspirationLibraryPage() {
       );
       setCardMedia(Object.fromEntries(entries));
     } catch (error) {
-      console.error("加载灵感图片失败", error);
-      alert(toErrorMessage(error, "加载灵感图片失败"));
+      console.error("加载卡片图片失败", error);
+      alert(toErrorMessage(error, "加载卡片图片失败"));
     }
   }
 
@@ -164,7 +189,7 @@ export default function InspirationLibraryPage() {
     event.preventDefault();
 
     if (!form.title.trim()) {
-      alert("灵感标题不能为空");
+      alert("卡片标题不能为空");
       return;
     }
 
@@ -188,7 +213,7 @@ export default function InspirationLibraryPage() {
       alert(
         toErrorMessage(
           error,
-          isEditing ? "编辑灵感卡片失败" : "创建灵感卡片失败",
+          isEditing ? "编辑卡片失败" : "创建卡片失败",
         ),
       );
     } finally {
@@ -200,6 +225,7 @@ export default function InspirationLibraryPage() {
     setEditingCardId(card.id);
     setPendingDeleteCard(null);
     setForm({
+      card_type: card.card_type,
       title: card.title,
       source_platform: card.source_platform,
       source_url: card.source_url ?? "",
@@ -211,7 +237,7 @@ export default function InspirationLibraryPage() {
 
   function requestDeleteCard(card: InspirationCard) {
     if (!card.id) {
-      alert("删除灵感卡片失败：灵感卡片 ID 为空");
+      alert("删除卡片失败：卡片 ID 为空");
       return;
     }
 
@@ -290,7 +316,7 @@ export default function InspirationLibraryPage() {
       await refreshCardMedia(cardId);
       setImageActionStatus({
         cardId,
-        message: "图片已从灵感卡片移除",
+        message: "图片已从卡片移除",
       });
     } catch (error) {
       console.error("移除图片失败", error);
@@ -305,7 +331,7 @@ export default function InspirationLibraryPage() {
 
   async function confirmDeleteCard() {
     if (!pendingDeleteCard?.id) {
-      alert("删除灵感卡片失败：灵感卡片 ID 为空");
+      alert("删除卡片失败：卡片 ID 为空");
       return;
     }
 
@@ -322,8 +348,8 @@ export default function InspirationLibraryPage() {
       );
       await loadCards();
     } catch (error) {
-      console.error("删除灵感卡片失败", error);
-      alert(toErrorMessage(error, "删除灵感卡片失败"));
+      console.error("删除卡片失败", error);
+      alert(toErrorMessage(error, "删除卡片失败"));
     }
   }
 
@@ -354,17 +380,17 @@ export default function InspirationLibraryPage() {
   return (
     <section className="page-frame">
       <header className="page-header">
-        <p className="page-kicker">Library</p>
-        <h1 className="page-title">Inspiration Library</h1>
+        <p className="page-kicker">Card Library</p>
+        <h1 className="page-title">卡片库</h1>
         <p className="page-copy">
-          保存摄影灵感来源、作者、备注、项目归属和标签。本阶段暂不处理图片导入。
+          管理摄影灵感与拍摄技巧卡片，沉淀可复用的风格参考、操作方法和创作线索。
         </p>
       </header>
 
       <div className="crud-layout inspiration-layout">
         <form className="form-panel sticky-form-panel" onSubmit={handleSubmit}>
           <div className="section-heading">
-            <h2>{isEditing ? "编辑灵感卡片" : "新建灵感卡片"}</h2>
+            <h2>{isEditing ? "编辑卡片" : "新建卡片"}</h2>
             {isEditing && (
               <button className="text-button" type="button" onClick={resetForm}>
                 取消编辑
@@ -372,14 +398,40 @@ export default function InspirationLibraryPage() {
             )}
           </div>
 
+          <div className="field">
+            <span>卡片类型</span>
+            <div className="card-type-segment" role="group" aria-label="卡片类型">
+              {cardTypes.map((type) => (
+                <button
+                  className={
+                    form.card_type === type.value
+                      ? "card-type-option card-type-option--active"
+                      : "card-type-option"
+                  }
+                  key={type.value}
+                  type="button"
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      card_type: type.value,
+                    }))
+                  }
+                >
+                  <strong>{type.label}</strong>
+                  <span>{type.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="field">
-            <span>标题 *</span>
+            <span>卡片标题 *</span>
             <input
               value={form.title}
               onChange={(event) =>
                 setForm((current) => ({ ...current, title: event.target.value }))
               }
-              placeholder="例如：咖啡馆窗边人像参考"
+              placeholder="例如：咖啡馆窗边人像参考 / 窗边光布光技巧"
             />
           </label>
 
@@ -430,7 +482,7 @@ export default function InspirationLibraryPage() {
           </label>
 
           <label className="field">
-            <span>备注</span>
+            <span>描述 / 备注</span>
             <textarea
               value={form.notes}
               onChange={(event) =>
@@ -477,11 +529,33 @@ export default function InspirationLibraryPage() {
           </div>
 
           <button className="primary-button" disabled={isSaving} type="submit">
-            {isSaving ? "保存中..." : isEditing ? "保存修改" : "创建灵感"}
+            {isSaving ? "保存中..." : isEditing ? "保存修改" : "创建卡片"}
           </button>
         </form>
 
         <section className="list-panel">
+          <div className="card-library-tabs" role="tablist" aria-label="卡片类型视图">
+            {cardTypeTabs.map((tab) => (
+              <button
+                aria-selected={filters.card_type === tab.value}
+                className={
+                  filters.card_type === tab.value
+                    ? "card-library-tab card-library-tab--active"
+                    : "card-library-tab"
+                }
+                key={tab.value}
+                type="button"
+                onClick={() => {
+                  const nextFilters = { ...filters, card_type: tab.value };
+                  setFilters(nextFilters);
+                  void loadCards(nextFilters);
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
           <form
             className="filter-panel search-filter-panel"
             onSubmit={handleFilterSubmit}
@@ -528,28 +602,31 @@ export default function InspirationLibraryPage() {
                 </button>
               </div>
             </div>
-            <p className="filter-result-text">{cards.length} 条灵感结果</p>
+            <p className="filter-result-text">{cards.length} 条卡片结果</p>
           </form>
 
           {isLoading ? (
-            <p className="muted-text">正在加载灵感卡片...</p>
+            <p className="muted-text">正在加载卡片...</p>
           ) : cards.length === 0 ? (
-            <p className="empty-message">暂无灵感卡片。先保存一个灵感来源吧。</p>
+            <p className="empty-message">还没有卡片。先保存一张灵感或技巧卡吧。</p>
           ) : (
             <div className="entity-list inspiration-list">
               {cards.map((card) => (
                 <article className="entity-card inspiration-card" key={card.id}>
                   <div className="card-title-row">
                     <div>
-                      <h2>{card.title}</h2>
+                      <div className="card-heading-line">
+                        <h2>{card.title}</h2>
+                        <span className={`card-type-badge card-type-badge--${card.card_type}`}>
+                          {cardTypeLabel(card.card_type)}
+                        </span>
+                      </div>
                       <p>
                         {platformLabel(card.source_platform)}
                         {card.author_name ? ` · ${card.author_name}` : ""}
                       </p>
                     </div>
-                    <span className="platform-pill">
-                      {platformLabel(card.source_platform)}
-                    </span>
+                    <span className="platform-pill">{platformLabel(card.source_platform)}</span>
                   </div>
 
                   <dl className="compact-meta">
@@ -602,7 +679,7 @@ export default function InspirationLibraryPage() {
                             <div className="media-thumb-item" key={asset.id}>
                               <div className="media-thumb-image-wrap">
                                 <img
-                                  alt={asset.original_filename ?? "灵感图片"}
+                                  alt={asset.original_filename ?? "卡片图片"}
                                   src={displayUrl}
                                   onError={(event) => {
                                     console.error("image load failed", {
@@ -634,7 +711,7 @@ export default function InspirationLibraryPage() {
                               {pendingRemoveMedia?.asset.id === asset.id && (
                                 <div className="inline-confirm">
                                   <p>
-                                    确定从灵感卡片中移除图片「
+                                    确定从卡片中移除图片「
                                     {asset.original_filename ?? "本地图片"}」吗？
                                   </p>
                                   <div className="row-actions">
@@ -696,7 +773,7 @@ export default function InspirationLibraryPage() {
 
                   {pendingDeleteCard?.id === card.id && (
                     <div className="inline-confirm">
-                      <p>确定删除灵感卡片「{card.title}」吗？</p>
+                      <p>确定删除卡片「{card.title}」吗？</p>
                       <div className="row-actions">
                         <button
                           className="danger-button"
@@ -728,6 +805,7 @@ export default function InspirationLibraryPage() {
 
 function toPayload(form: InspirationFormState): InspirationCardPayload {
   return {
+    card_type: form.card_type,
     title: form.title,
     source_platform: form.source_platform,
     source_url: optionalText(form.source_url),
@@ -736,6 +814,10 @@ function toPayload(form: InspirationFormState): InspirationCardPayload {
     project_id: null,
     tag_ids: form.tag_ids,
   };
+}
+
+function cardTypeLabel(cardType: CardType): string {
+  return cardTypes.find((type) => type.value === cardType)?.label ?? "灵感";
 }
 
 function optionalText(value: string): string | null {

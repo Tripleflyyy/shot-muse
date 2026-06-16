@@ -81,6 +81,18 @@ mod tests {
             tag_repository::preset_tag_count()
         );
 
+        let inspiration_columns = connection
+            .prepare("PRAGMA table_info(inspiration_cards)")
+            .expect("prepare inspiration table info")
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("read inspiration table info")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("collect inspiration columns");
+        assert!(
+            inspiration_columns.iter().any(|column| column == "card_type"),
+            "inspiration_cards should include card_type"
+        );
+
         fs::remove_dir_all(temp_dir).expect("temporary database directory is removed");
     }
 }

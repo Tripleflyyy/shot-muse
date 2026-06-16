@@ -539,6 +539,69 @@ button:disabled {
   background: #fffaf3 !important;
 }
 
+.card-library-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-width: 100%;
+}
+
+.card-library-tab {
+  border: 1px solid #ded4c5;
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: #6f6256;
+  background: #fffaf3;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.card-library-tab--active {
+  border-color: #c8973f;
+  color: #332815;
+  background: #f0c36a;
+}
+
+.card-type-segment {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.card-type-option {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid #ded4c5;
+  border-radius: 10px;
+  padding: 10px;
+  color: #5f574e;
+  background: #fffdf9;
+  cursor: pointer;
+  text-align: left;
+}
+
+.card-type-option strong {
+  color: #2f2a25;
+  font-size: 13px;
+}
+
+.card-type-option span {
+  color: #7a7066;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.card-type-option--active {
+  border-color: #c8973f;
+  background: #fff6df;
+  box-shadow: 0 0 0 3px rgba(200, 151, 63, 0.12);
+}
+
 .filter-result-text {
   margin: 0;
   color: #7a7066;
@@ -670,11 +733,46 @@ button:disabled {
   align-items: start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+}
+
+.card-title-row > div {
+  min-width: 0;
+}
+
+.card-heading-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
 }
 
 .entity-card h2 {
   margin: 0;
   font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.card-type-badge {
+  flex: 0 0 auto;
+  border: 1px solid #d6d0c7;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.card-type-badge--inspiration {
+  border-color: #d8b870;
+  color: #7a5418;
+  background: #fff6df;
+}
+
+.card-type-badge--technique {
+  border-color: #9fc4b7;
+  color: #2a6f60;
+  background: #eaf7f3;
 }
 
 .entity-card p,

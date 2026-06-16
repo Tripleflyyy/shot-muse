@@ -6,6 +6,7 @@ use crate::models::{InspirationCard, InspirationCardFilters, InspirationCardPayl
 #[derive(Debug, Clone)]
 struct InspirationCardRow {
     id: String,
+    card_type: String,
     title: String,
     source_platform: String,
     source_url: Option<String>,
@@ -29,6 +30,7 @@ pub fn create_inspiration_card(
         "
         INSERT INTO inspiration_cards (
           id,
+          card_type,
           title,
           source_platform,
           source_url,
@@ -47,13 +49,15 @@ pub fn create_inspiration_card(
           ?5,
           ?6,
           ?7,
-          COALESCE(?8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+          ?8,
+          COALESCE(?9, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
           strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         )
         ",
         params![
             id,
+            normalized_card_type(payload.card_type.as_deref()),
             payload.title.trim(),
             payload.source_platform.trim(),
             normalize_optional_text(&payload.source_url),
@@ -77,18 +81,20 @@ pub fn update_inspiration_card(
         "
         UPDATE inspiration_cards
         SET
-          title = ?2,
-          source_platform = ?3,
-          source_url = ?4,
-          author_name = ?5,
-          notes = ?6,
-          project_id = ?7,
-          collected_at = COALESCE(?8, collected_at),
+          card_type = ?2,
+          title = ?3,
+          source_platform = ?4,
+          source_url = ?5,
+          author_name = ?6,
+          notes = ?7,
+          project_id = ?8,
+          collected_at = COALESCE(?9, collected_at),
           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         WHERE id = ?1
         ",
         params![
             id,
+            normalized_card_type(payload.card_type.as_deref()),
             payload.title.trim(),
             payload.source_platform.trim(),
             normalize_optional_text(&payload.source_url),
@@ -121,6 +127,7 @@ pub fn get_inspiration_card(
             "
             SELECT
               inspiration_cards.id,
+              inspiration_cards.card_type,
               inspiration_cards.title,
               inspiration_cards.source_platform,
               inspiration_cards.source_url,
@@ -152,6 +159,7 @@ pub fn list_inspiration_cards(
         "
         SELECT
           inspiration_cards.id,
+          inspiration_cards.card_type,
           inspiration_cards.title,
           inspiration_cards.source_platform,
           inspiration_cards.source_url,
@@ -173,6 +181,7 @@ pub fn list_inspiration_cards(
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     let keyword = normalize_optional_text(&filters.keyword).map(|value| value.to_lowercase());
+    let card_type = normalize_optional_text(&filters.card_type);
     let project_id = normalize_optional_text(&filters.project_id);
     let source_platform = normalize_optional_text(&filters.source_platform);
     let tag_ids = normalized_ids(filters.tag_ids.as_deref().unwrap_or(&[]));
@@ -180,6 +189,12 @@ pub fn list_inspiration_cards(
     let mut cards = Vec::new();
     for row in rows {
         let card = hydrate_inspiration_card(connection, row)?;
+
+        if let Some(card_type) = card_type.as_deref() {
+            if card.card_type != card_type {
+                continue;
+            }
+        }
 
         if let Some(project_id) = project_id.as_deref() {
             if card.project_id.as_deref() != Some(project_id) {
@@ -300,6 +315,7 @@ pub fn list_project_inspirations(
         "
         SELECT
           inspiration_cards.id,
+          inspiration_cards.card_type,
           inspiration_cards.title,
           inspiration_cards.source_platform,
           inspiration_cards.source_url,
@@ -382,6 +398,7 @@ fn hydrate_inspiration_card(
     Ok(InspirationCard {
         tags: list_tags_for_inspiration(connection, &row.id)?,
         id: row.id,
+        card_type: row.card_type,
         title: row.title,
         source_platform: row.source_platform,
         source_url: row.source_url,
@@ -437,17 +454,26 @@ fn list_tags_for_inspiration(
 fn map_inspiration_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InspirationCardRow> {
     Ok(InspirationCardRow {
         id: row.get(0)?,
-        title: row.get(1)?,
-        source_platform: row.get(2)?,
-        source_url: row.get(3)?,
-        author_name: row.get(4)?,
-        notes: row.get(5)?,
-        project_id: row.get(6)?,
-        project_name: row.get(7)?,
-        collected_at: row.get(8)?,
-        created_at: row.get(9)?,
-        updated_at: row.get(10)?,
+        card_type: row.get(1)?,
+        title: row.get(2)?,
+        source_platform: row.get(3)?,
+        source_url: row.get(4)?,
+        author_name: row.get(5)?,
+        notes: row.get(6)?,
+        project_id: row.get(7)?,
+        project_name: row.get(8)?,
+        collected_at: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
     })
+}
+
+fn normalized_card_type(value: Option<&str>) -> String {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("inspiration")
+        .to_string()
 }
 
 fn normalize_optional_text(value: &Option<String>) -> Option<String> {
@@ -523,6 +549,7 @@ mod tests {
         let created = create_inspiration_card(
             &connection,
             &InspirationCardPayload {
+                card_type: None,
                 title: "咖啡馆窗边人像参考".into(),
                 source_platform: "xiaohongshu".into(),
                 source_url: Some("https://example.com/original".into()),
@@ -549,6 +576,7 @@ mod tests {
             &connection,
             &created.id,
             &InspirationCardPayload {
+                card_type: None,
                 title: "咖啡馆人像参考更新".into(),
                 source_platform: "instagram".into(),
                 source_url: None,
@@ -589,6 +617,7 @@ mod tests {
         let card = create_inspiration_card(
             &connection,
             &InspirationCardPayload {
+                card_type: None,
                 title: "项目参考灵感".into(),
                 source_platform: "xiaohongshu".into(),
                 source_url: None,
@@ -659,6 +688,7 @@ mod tests {
         let matching = create_inspiration_card(
             &connection,
             &InspirationCardPayload {
+                card_type: None,
                 title: "咖啡馆窗边人像参考".into(),
                 source_platform: "xiaohongshu".into(),
                 source_url: Some("https://example.com/window".into()),
@@ -674,6 +704,7 @@ mod tests {
         create_inspiration_card(
             &connection,
             &InspirationCardPayload {
+                card_type: None,
                 title: "夜景霓虹参考".into(),
                 source_platform: "youtube".into(),
                 source_url: None,
@@ -689,6 +720,7 @@ mod tests {
         let filtered = list_inspiration_cards(
             &connection,
             &InspirationCardFilters {
+                card_type: None,
                 project_id: Some(project_id),
                 source_platform: Some("xiaohongshu".into()),
                 keyword: Some("自然光".into()),
@@ -703,6 +735,7 @@ mod tests {
         let any_tag_filtered = list_inspiration_cards(
             &connection,
             &InspirationCardFilters {
+                card_type: None,
                 project_id: None,
                 source_platform: None,
                 keyword: None,
@@ -716,6 +749,7 @@ mod tests {
         let tag_keyword_filtered = list_inspiration_cards(
             &connection,
             &InspirationCardFilters {
+                card_type: None,
                 project_id: None,
                 source_platform: None,
                 keyword: Some("筛选标签 B".into()),
@@ -725,5 +759,107 @@ mod tests {
         .expect("filter by tag name keyword");
         assert_eq!(tag_keyword_filtered.len(), 1);
         assert_eq!(tag_keyword_filtered[0].title, "夜景霓虹参考");
+    }
+
+    #[test]
+    fn card_type_defaults_updates_and_filters() {
+        let connection = test_connection();
+        let tag_id = create_tag(&connection, "技巧测试标签");
+
+        let inspiration = create_inspiration_card(
+            &connection,
+            &InspirationCardPayload {
+                card_type: None,
+                title: "默认灵感卡".into(),
+                source_platform: "xiaohongshu".into(),
+                source_url: None,
+                author_name: None,
+                notes: Some("默认应为灵感".into()),
+                project_id: None,
+                collected_at: None,
+                tag_ids: Some(vec![tag_id.clone()]),
+            },
+        )
+        .expect("create default inspiration card");
+        assert_eq!(inspiration.card_type, "inspiration");
+        assert_eq!(inspiration.tags.len(), 1);
+
+        let technique = create_inspiration_card(
+            &connection,
+            &InspirationCardPayload {
+                card_type: Some("technique".into()),
+                title: "窗边光布光技巧".into(),
+                source_platform: "youtube".into(),
+                source_url: None,
+                author_name: None,
+                notes: Some("记录布光步骤".into()),
+                project_id: None,
+                collected_at: None,
+                tag_ids: Some(vec![tag_id]),
+            },
+        )
+        .expect("create technique card");
+        assert_eq!(technique.card_type, "technique");
+
+        let updated = update_inspiration_card(
+            &connection,
+            &inspiration.id,
+            &InspirationCardPayload {
+                card_type: Some("technique".into()),
+                title: "默认灵感卡改为技巧".into(),
+                source_platform: "xiaohongshu".into(),
+                source_url: None,
+                author_name: None,
+                notes: Some("更新卡片类型".into()),
+                project_id: None,
+                collected_at: None,
+                tag_ids: Some(vec![]),
+            },
+        )
+        .expect("update card type")
+        .expect("updated card exists");
+        assert_eq!(updated.card_type, "technique");
+
+        let all_cards = list_inspiration_cards(
+            &connection,
+            &InspirationCardFilters {
+                card_type: None,
+                project_id: None,
+                source_platform: None,
+                keyword: None,
+                tag_ids: None,
+            },
+        )
+        .expect("list all cards");
+        assert_eq!(all_cards.len(), 2);
+
+        let inspiration_cards = list_inspiration_cards(
+            &connection,
+            &InspirationCardFilters {
+                card_type: Some("inspiration".into()),
+                project_id: None,
+                source_platform: None,
+                keyword: None,
+                tag_ids: None,
+            },
+        )
+        .expect("list inspiration cards");
+        assert!(inspiration_cards.is_empty());
+
+        let technique_cards = list_inspiration_cards(
+            &connection,
+            &InspirationCardFilters {
+                card_type: Some("technique".into()),
+                project_id: None,
+                source_platform: None,
+                keyword: None,
+                tag_ids: None,
+            },
+        )
+        .expect("list technique cards");
+        assert_eq!(technique_cards.len(), 2);
+        assert!(technique_cards
+            .iter()
+            .all(|card| card.card_type == "technique"));
     }
 }

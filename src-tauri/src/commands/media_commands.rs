@@ -383,6 +383,7 @@ mod tests {
                 inspiration_repository::create_inspiration_card(
                     connection,
                     &InspirationCardPayload {
+                        card_type: None,
                         title: "测试图片灵感".into(),
                         source_platform: "xiaohongshu".into(),
                         source_url: None,

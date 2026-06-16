@@ -5,6 +5,7 @@ use crate::models::Tag;
 #[derive(Debug, Clone, Serialize)]
 pub struct InspirationCard {
     pub id: String,
+    pub card_type: String,
     pub title: String,
     pub source_platform: String,
     pub source_url: Option<String>,
@@ -20,6 +21,7 @@ pub struct InspirationCard {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct InspirationCardPayload {
+    pub card_type: Option<String>,
     pub title: String,
     pub source_platform: String,
     pub source_url: Option<String>,
@@ -32,6 +34,7 @@ pub struct InspirationCardPayload {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct InspirationCardFilters {
+    pub card_type: Option<String>,
     pub project_id: Option<String>,
     pub source_platform: Option<String>,
     pub keyword: Option<String>,
