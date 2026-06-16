@@ -1,4 +1,5 @@
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import {
@@ -37,6 +38,11 @@ type CardFiltersState = {
 };
 
 type CardModalMode = "create" | "detail" | null;
+
+type PendingCreateImage = {
+  sourcePath: string;
+  filename: string;
+};
 
 const sourcePlatforms: Array<{ value: SourcePlatform; label: string }> = [
   { value: "douyin", label: "抖音" },
@@ -100,6 +106,7 @@ export default function InspirationLibraryPage() {
     cardId: string;
     asset: MediaAsset;
   } | null>(null);
+  const [pendingCreateImages, setPendingCreateImages] = useState<PendingCreateImage[]>([]);
   const [imageActionStatus, setImageActionStatus] = useState<{
     cardId: string;
     message: string;
@@ -212,6 +219,7 @@ export default function InspirationLibraryPage() {
     setTagSearchKeyword("");
     setPendingDeleteCard(null);
     setPendingRemoveMedia(null);
+    setPendingCreateImages([]);
     setSelectedCard(null);
     setIsEditingDetail(false);
     setModalMode("create");
@@ -223,6 +231,7 @@ export default function InspirationLibraryPage() {
     setTagSearchKeyword("");
     setPendingDeleteCard(null);
     setPendingRemoveMedia(null);
+    setPendingCreateImages([]);
     setIsEditingDetail(false);
     setModalMode("detail");
   }
@@ -234,6 +243,7 @@ export default function InspirationLibraryPage() {
     setPendingDeleteCard(null);
     setPendingRemoveMedia(null);
     setImageActionStatus(null);
+    setPendingCreateImages([]);
     setTagSearchKeyword("");
     setForm(emptyForm);
   }
@@ -280,7 +290,17 @@ export default function InspirationLibraryPage() {
         await loadCards();
         await refreshCardMedia(updated.id);
       } else {
-        await createInspirationCard(payload);
+        const created = await createInspirationCard(payload);
+        if (pendingCreateImages.length > 0) {
+          try {
+            for (const image of pendingCreateImages) {
+              await importLocalImage(image.sourcePath, "inspiration", created.id);
+            }
+          } catch (error) {
+            console.error("新建卡片图片导入失败", error);
+            alert(toErrorMessage(error, "卡片已创建，但图片导入失败"));
+          }
+        }
         closeModal();
         await loadCards();
       }
@@ -376,6 +396,68 @@ export default function InspirationLibraryPage() {
     } finally {
       setImportingCardId(null);
     }
+  }
+
+  async function handleAddPendingCreateImage() {
+    setImageActionStatus({
+      cardId: "new-card",
+      message: "正在打开文件选择器...",
+    });
+
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "图片",
+            extensions: ["jpg", "jpeg", "png", "webp"],
+          },
+        ],
+      });
+
+      if (!selected) {
+        setImageActionStatus({
+          cardId: "new-card",
+          message: "已取消选择图片",
+        });
+        return;
+      }
+
+      const sourcePath = Array.isArray(selected) ? selected[0] : selected;
+      if (!sourcePath) {
+        setImageActionStatus({
+          cardId: "new-card",
+          message: "未选择图片",
+        });
+        return;
+      }
+
+      setPendingCreateImages((current) => [
+        ...current,
+        {
+          sourcePath,
+          filename: fileNameFromPath(sourcePath),
+        },
+      ]);
+      setImageActionStatus({
+        cardId: "new-card",
+        message: "图片已选择，创建卡片后会自动导入",
+      });
+    } catch (error) {
+      console.error("选择图片失败", error);
+      const message = toErrorMessage(error, "选择图片失败");
+      setImageActionStatus({
+        cardId: "new-card",
+        message,
+      });
+      alert(message);
+    }
+  }
+
+  function removePendingCreateImage(sourcePath: string) {
+    setPendingCreateImages((current) =>
+      current.filter((image) => image.sourcePath !== sourcePath),
+    );
   }
 
   function requestRemoveMedia(cardId: string, asset: MediaAsset) {
@@ -589,9 +671,15 @@ export default function InspirationLibraryPage() {
                   isCreate={modalMode === "create"}
                   isSaving={isSaving}
                   mediaAssets={selectedCardMedia}
-                  onAddImage={selectedCard ? () => void handleAddImage(selectedCard) : undefined}
+                  pendingCreateImages={pendingCreateImages}
+                  onAddImage={
+                    selectedCard
+                      ? () => void handleAddImage(selectedCard)
+                      : () => void handleAddPendingCreateImage()
+                  }
                   onCancel={modalMode === "create" ? closeModal : cancelDetailEdit}
                   onChange={setForm}
+                  onRemovePendingCreateImage={removePendingCreateImage}
                   onRemoveMedia={selectedCard ? requestRemoveMedia : undefined}
                   onSubmit={handleSubmit}
                   pendingRemoveMedia={pendingRemoveMedia}
@@ -749,11 +837,13 @@ function CardForm({
   isCreate,
   isSaving,
   mediaAssets,
+  pendingCreateImages,
   onAddImage,
   onCancel,
   onChange,
   onConfirmRemoveMedia,
   onRemoveMedia,
+  onRemovePendingCreateImage,
   onSubmit,
   pendingRemoveMedia,
   selectableTags,
@@ -767,11 +857,13 @@ function CardForm({
   isCreate: boolean;
   isSaving: boolean;
   mediaAssets: MediaAsset[];
+  pendingCreateImages: PendingCreateImage[];
   onAddImage?: () => void;
   onCancel: () => void;
   onChange: (updater: CardFormState | ((current: CardFormState) => CardFormState)) => void;
   onConfirmRemoveMedia: () => void;
   onRemoveMedia?: (cardId: string, asset: MediaAsset) => void;
+  onRemovePendingCreateImage: (sourcePath: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   pendingRemoveMedia: { cardId: string; asset: MediaAsset } | null;
   selectableTags: Tag[];
@@ -924,13 +1016,21 @@ function CardForm({
             <span className="media-empty">保存后可添加图片</span>
           )}
         </div>
-        <CardMediaStrip
-          imageActionStatus={imageActionStatus}
-          mediaAssets={mediaAssets}
-          onConfirmRemoveMedia={onConfirmRemoveMedia}
-          onRemoveMedia={onRemoveMedia}
-          pendingRemoveMedia={pendingRemoveMedia}
-        />
+        {isCreate ? (
+          <PendingCreateImageStrip
+            imageActionStatus={imageActionStatus}
+            images={pendingCreateImages}
+            onRemove={onRemovePendingCreateImage}
+          />
+        ) : (
+          <CardMediaStrip
+            imageActionStatus={imageActionStatus}
+            mediaAssets={mediaAssets}
+            onConfirmRemoveMedia={onConfirmRemoveMedia}
+            onRemoveMedia={onRemoveMedia}
+            pendingRemoveMedia={pendingRemoveMedia}
+          />
+        )}
       </section>
 
       <div className="row-actions">
@@ -942,6 +1042,65 @@ function CardForm({
         </button>
       </div>
     </form>
+  );
+}
+
+function PendingCreateImageStrip({
+  imageActionStatus,
+  images,
+  onRemove,
+}: {
+  imageActionStatus: { cardId: string; message: string } | null;
+  images: PendingCreateImage[];
+  onRemove: (sourcePath: string) => void;
+}) {
+  return (
+    <>
+      {imageActionStatus?.cardId === "new-card" && (
+        <p className="media-action-status">{imageActionStatus.message}</p>
+      )}
+
+      {images.length === 0 ? (
+        <p className="media-empty">暂无待上传图片</p>
+      ) : (
+        <div className="card-media-strip">
+          {images.map((image) => {
+            const displayUrl = convertFileSrc(image.sourcePath);
+            return (
+              <div className="media-thumb-item card-media-strip-item" key={image.sourcePath}>
+                <div className="media-thumb-image-wrap">
+                  <img
+                    alt={image.filename}
+                    src={displayUrl}
+                    onError={(event) => {
+                      console.error("pending image preview failed", {
+                        sourcePath: image.sourcePath,
+                        displayUrl,
+                      });
+                      event.currentTarget.classList.add("is-broken");
+                      event.currentTarget
+                        .closest(".media-thumb-image-wrap")
+                        ?.classList.add("is-broken");
+                    }}
+                  />
+                  <span className="media-load-fallback">图片预览失败</span>
+                </div>
+                <div className="media-thumb-meta">
+                  <span>{image.filename}</span>
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => onRemove(image.sourcePath)}
+                  >
+                    移除
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1227,6 +1386,10 @@ function softTagBackground(color: string): string {
 
 function truncateText(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
+function fileNameFromPath(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? "本地图片";
 }
 
 function formatDateTime(value: string): string {
