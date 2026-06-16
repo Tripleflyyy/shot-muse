@@ -1469,6 +1469,16 @@ button:disabled {
     grid-template-columns: auto 1fr;
   }
 
+  .inline-tag-create-header,
+  .inline-tag-create--existing {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .inline-tag-create .tag-color-picker-main {
+    grid-template-columns: auto 1fr;
+  }
+
   .tag-color-value {
     grid-column: 1 / -1;
   }
@@ -1587,6 +1597,86 @@ button:disabled {
   border-radius: 8px;
   padding: 10px;
   background: #ffffff;
+}
+
+.inline-tag-selector {
+  display: grid;
+  max-width: 100%;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid #ebe3d6;
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.inline-tag-selector input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.inline-tag-section {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.inline-tag-section-title,
+.inline-tag-create-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.inline-tag-section-title span,
+.inline-tag-create-header strong {
+  color: #2f2a25;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.inline-tag-section-title small,
+.inline-tag-create-header p {
+  margin: 0;
+  color: #7a7066;
+  font-size: 12px;
+}
+
+.inline-selected-tag .tag-chip-remove {
+  margin-right: -2px;
+}
+
+.inline-tag-create {
+  display: grid;
+  max-width: 100%;
+  min-width: 0;
+  gap: 10px;
+  border: 1px solid #eadcc8;
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(180deg, #fffaf3, #fff6ea);
+}
+
+.inline-tag-create--existing {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.inline-tag-create-controls {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.inline-tag-create .tag-color-picker-main {
+  grid-template-columns: auto minmax(100px, 1fr) auto;
+}
+
+.inline-tag-create > .secondary-button {
+  justify-self: start;
 }
 
 .checkbox-grid {
