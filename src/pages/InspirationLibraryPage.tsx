@@ -107,6 +107,8 @@ export default function InspirationLibraryPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [importingCardId, setImportingCardId] = useState<string | null>(null);
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+  const [carouselIndexes, setCarouselIndexes] = useState<Record<string, number>>({});
 
   const selectableTags = useMemo(() => {
     const keyword = tagSearchKeyword.trim().toLowerCase();
@@ -130,6 +132,26 @@ export default function InspirationLibraryPage() {
     // Filters are applied explicitly by the toolbar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!hoveredCardId) {
+      return;
+    }
+
+    const images = cardMedia[hoveredCardId] ?? [];
+    if (images.length <= 1) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setCarouselIndexes((current) => ({
+        ...current,
+        [hoveredCardId]: ((current[hoveredCardId] ?? 0) + 1) % images.length,
+      }));
+    }, 2000);
+
+    return () => window.clearInterval(timer);
+  }, [hoveredCardId, cardMedia]);
 
   async function loadReferenceData() {
     try {
@@ -406,6 +428,16 @@ export default function InspirationLibraryPage() {
     }));
   }
 
+  function handleCardHover(cardId: string) {
+    setHoveredCardId(cardId);
+    setCarouselIndexes((current) => ({ ...current, [cardId]: 0 }));
+  }
+
+  function handleCardLeave(cardId: string) {
+    setHoveredCardId((current) => (current === cardId ? null : current));
+    setCarouselIndexes((current) => ({ ...current, [cardId]: 0 }));
+  }
+
   return (
     <section className="page-frame">
       <header className="page-header card-library-page-header">
@@ -500,8 +532,11 @@ export default function InspirationLibraryPage() {
             {cards.map((card) => (
               <CardLibraryTile
                 card={card}
+                carouselIndex={carouselIndexes[card.id] ?? 0}
                 key={card.id}
                 mediaAssets={cardMedia[card.id] ?? []}
+                onHover={() => handleCardHover(card.id)}
+                onLeave={() => handleCardLeave(card.id)}
                 onOpen={() => openDetailModal(card)}
               />
             ))}
@@ -593,18 +628,39 @@ export default function InspirationLibraryPage() {
 
 function CardLibraryTile({
   card,
+  carouselIndex,
   mediaAssets,
+  onHover,
+  onLeave,
   onOpen,
 }: {
   card: InspirationCard;
+  carouselIndex: number;
   mediaAssets: MediaAsset[];
+  onHover: () => void;
+  onLeave: () => void;
   onOpen: () => void;
 }) {
-  const cover = mediaAssets[0];
+  const coverIndex =
+    mediaAssets.length > 0 ? Math.min(carouselIndex, mediaAssets.length - 1) : 0;
+  const cover = mediaAssets[coverIndex];
 
   return (
-    <button className="card-library-tile" type="button" onClick={onOpen}>
-      <CardCover asset={cover} title={card.title} />
+    <button
+      className="card-library-tile"
+      type="button"
+      onClick={onOpen}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      onFocus={onHover}
+      onBlur={onLeave}
+    >
+      <CardCover
+        asset={cover}
+        imageCount={mediaAssets.length}
+        imageIndex={coverIndex}
+        title={card.title}
+      />
       <span className={`card-type-badge card-type-badge--${card.card_type}`}>
         {cardTypeLabel(card.card_type)}
       </span>
@@ -640,9 +696,13 @@ function CardLibraryTile({
 
 function CardCover({
   asset,
+  imageCount,
+  imageIndex,
   title,
 }: {
   asset?: MediaAsset;
+  imageCount: number;
+  imageIndex: number;
   title: string;
 }) {
   if (!asset) {
@@ -672,6 +732,11 @@ function CardCover({
             ?.classList.add("is-broken");
         }}
       />
+      {imageCount > 1 && (
+        <span className="card-library-image-count">
+          {imageIndex + 1} / {imageCount}
+        </span>
+      )}
       <span className="media-load-fallback">图片加载失败</span>
     </div>
   );
