@@ -19,7 +19,7 @@ import {
   listMediaAssetsByTarget,
   MediaAsset,
 } from "../services/mediaApi";
-import { listTags, Tag, TagCategory } from "../services/tagApi";
+import { createCustomTag, listTags, Tag, TagCategory } from "../services/tagApi";
 
 type CardFormState = {
   card_type: CardType;
@@ -74,6 +74,19 @@ const tagCategories: Array<{ value: TagCategory; label: string }> = [
   { value: "custom", label: "自定义" },
 ];
 
+const tagColorOptions = [
+  { label: "琥珀", value: "#d9902f" },
+  { label: "珊瑚", value: "#e76f51" },
+  { label: "玫瑰", value: "#d95f8d" },
+  { label: "紫藤", value: "#8e7cc3" },
+  { label: "天空", value: "#5b8def" },
+  { label: "湖蓝", value: "#3aa6b9" },
+  { label: "薄荷", value: "#4caf50" },
+  { label: "青绿", value: "#2a9d8f" },
+  { label: "橄榄", value: "#8aa63f" },
+  { label: "石墨", value: "#666666" },
+];
+
 const emptyForm: CardFormState = {
   card_type: "inspiration",
   title: "",
@@ -96,6 +109,8 @@ export default function InspirationLibraryPage() {
   const [form, setForm] = useState<CardFormState>(emptyForm);
   const [filters, setFilters] = useState<CardFiltersState>(emptyFilters);
   const [tagSearchKeyword, setTagSearchKeyword] = useState("");
+  const [newTagColor, setNewTagColor] = useState(tagColorOptions[0].value);
+  const [isCreatingInlineTag, setIsCreatingInlineTag] = useState(false);
   const [modalMode, setModalMode] = useState<CardModalMode>(null);
   const [selectedCard, setSelectedCard] = useState<InspirationCard | null>(null);
   const [isEditingDetail, setIsEditingDetail] = useState(false);
@@ -117,19 +132,44 @@ export default function InspirationLibraryPage() {
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [carouselIndexes, setCarouselIndexes] = useState<Record<string, number>>({});
 
+  const selectedTags = useMemo(
+    () =>
+      form.tag_ids
+        .map((tagId) => tags.find((tag) => tag.id === tagId))
+        .filter((tag): tag is Tag => Boolean(tag)),
+    [form.tag_ids, tags],
+  );
+
   const selectableTags = useMemo(() => {
     const keyword = tagSearchKeyword.trim().toLowerCase();
+    const selectedTagIds = new Set(form.tag_ids);
+    const visibleTags = tags.filter((tag) => !selectedTagIds.has(tag.id));
+
     if (!keyword) {
-      return tags;
+      return visibleTags;
     }
 
-    return tags.filter((tag) =>
+    return visibleTags.filter((tag) =>
       [tag.name, tag.category, categoryLabel(tag.category)]
         .join(" ")
         .toLowerCase()
         .includes(keyword),
     );
-  }, [tagSearchKeyword, tags]);
+  }, [form.tag_ids, tagSearchKeyword, tags]);
+
+  const inlineTagName = tagSearchKeyword.trim();
+  const existingInlineTag = useMemo(() => {
+    if (!inlineTagName) {
+      return null;
+    }
+
+    const normalizedName = inlineTagName.toLowerCase();
+    return (
+      tags.find((tag) => tag.name.trim().toLowerCase() === normalizedName) ?? null
+    );
+  }, [inlineTagName, tags]);
+
+  const canCreateInlineTag = Boolean(inlineTagName && !existingInlineTag);
 
   const selectedCardMedia = selectedCard ? cardMedia[selectedCard.id] ?? [] : [];
 
@@ -217,6 +257,7 @@ export default function InspirationLibraryPage() {
   function openCreateModal() {
     setForm(emptyForm);
     setTagSearchKeyword("");
+    setNewTagColor(tagColorOptions[0].value);
     setPendingDeleteCard(null);
     setPendingRemoveMedia(null);
     setPendingCreateImages([]);
@@ -229,6 +270,7 @@ export default function InspirationLibraryPage() {
     setSelectedCard(card);
     setForm(formFromCard(card));
     setTagSearchKeyword("");
+    setNewTagColor(tagColorOptions[0].value);
     setPendingDeleteCard(null);
     setPendingRemoveMedia(null);
     setPendingCreateImages([]);
@@ -245,6 +287,7 @@ export default function InspirationLibraryPage() {
     setImageActionStatus(null);
     setPendingCreateImages([]);
     setTagSearchKeyword("");
+    setNewTagColor(tagColorOptions[0].value);
     setForm(emptyForm);
   }
 
@@ -254,6 +297,7 @@ export default function InspirationLibraryPage() {
     }
     setForm(formFromCard(selectedCard));
     setTagSearchKeyword("");
+    setNewTagColor(tagColorOptions[0].value);
     setPendingDeleteCard(null);
     setIsEditingDetail(true);
   }
@@ -510,6 +554,55 @@ export default function InspirationLibraryPage() {
     }));
   }
 
+  function removeFormTag(tagId: string) {
+    setForm((current) => ({
+      ...current,
+      tag_ids: current.tag_ids.filter((id) => id !== tagId),
+    }));
+  }
+
+  function addFormTag(tagId: string) {
+    setForm((current) => ({
+      ...current,
+      tag_ids: current.tag_ids.includes(tagId)
+        ? current.tag_ids
+        : [...current.tag_ids, tagId],
+    }));
+  }
+
+  async function handleCreateInlineTag() {
+    const name = inlineTagName;
+    if (!name) {
+      alert("标签名称不能为空");
+      return;
+    }
+
+    if (existingInlineTag) {
+      addFormTag(existingInlineTag.id);
+      setTagSearchKeyword("");
+      alert(`标签「${existingInlineTag.name}」已存在，已为你选中`);
+      return;
+    }
+
+    setIsCreatingInlineTag(true);
+    try {
+      const created = await createCustomTag({
+        name,
+        category: "custom",
+        color: isValidHexColor(newTagColor) ? newTagColor : tagColorOptions[0].value,
+      });
+      setTags((current) => [...current, created]);
+      addFormTag(created.id);
+      setTagSearchKeyword("");
+      setNewTagColor(tagColorOptions[0].value);
+    } catch (error) {
+      console.error("快速新建标签失败", error);
+      alert(toErrorMessage(error, "快速新建标签失败"));
+    } finally {
+      setIsCreatingInlineTag(false);
+    }
+  }
+
   function handleCardHover(cardId: string) {
     setHoveredCardId(cardId);
     setCarouselIndexes((current) => ({ ...current, [cardId]: 0 }));
@@ -683,10 +776,18 @@ export default function InspirationLibraryPage() {
                   onRemoveMedia={selectedCard ? requestRemoveMedia : undefined}
                   onSubmit={handleSubmit}
                   pendingRemoveMedia={pendingRemoveMedia}
+                  canCreateInlineTag={canCreateInlineTag}
+                  existingInlineTag={existingInlineTag}
+                  isCreatingInlineTag={isCreatingInlineTag}
+                  newTagColor={newTagColor}
+                  onCreateInlineTag={() => void handleCreateInlineTag()}
                   selectableTags={selectableTags}
+                  selectedTags={selectedTags}
                   tagSearchKeyword={tagSearchKeyword}
                   toggleTag={toggleFormTag}
                   onConfirmRemoveMedia={() => void confirmRemoveMedia()}
+                  onNewTagColorChange={setNewTagColor}
+                  onRemoveTag={removeFormTag}
                   onTagSearchChange={setTagSearchKeyword}
                 />
               ) : selectedCard ? (
@@ -835,18 +936,26 @@ function CardForm({
   imageActionStatus,
   importingCardId,
   isCreate,
+  canCreateInlineTag,
+  existingInlineTag,
+  isCreatingInlineTag,
   isSaving,
   mediaAssets,
+  newTagColor,
   pendingCreateImages,
   onAddImage,
   onCancel,
   onChange,
+  onCreateInlineTag,
   onConfirmRemoveMedia,
+  onNewTagColorChange,
   onRemoveMedia,
   onRemovePendingCreateImage,
+  onRemoveTag,
   onSubmit,
   pendingRemoveMedia,
   selectableTags,
+  selectedTags,
   tagSearchKeyword,
   toggleTag,
   onTagSearchChange,
@@ -855,18 +964,26 @@ function CardForm({
   imageActionStatus: { cardId: string; message: string } | null;
   importingCardId: string | null;
   isCreate: boolean;
+  canCreateInlineTag: boolean;
+  existingInlineTag: Tag | null;
+  isCreatingInlineTag: boolean;
   isSaving: boolean;
   mediaAssets: MediaAsset[];
+  newTagColor: string;
   pendingCreateImages: PendingCreateImage[];
   onAddImage?: () => void;
   onCancel: () => void;
   onChange: (updater: CardFormState | ((current: CardFormState) => CardFormState)) => void;
+  onCreateInlineTag: () => void;
   onConfirmRemoveMedia: () => void;
+  onNewTagColorChange: (color: string) => void;
   onRemoveMedia?: (cardId: string, asset: MediaAsset) => void;
   onRemovePendingCreateImage: (sourcePath: string) => void;
+  onRemoveTag: (tagId: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   pendingRemoveMedia: { cardId: string; asset: MediaAsset } | null;
   selectableTags: Tag[];
+  selectedTags: Tag[];
   tagSearchKeyword: string;
   toggleTag: (tagId: string) => void;
   onTagSearchChange: (value: string) => void;
@@ -967,37 +1084,161 @@ function CardForm({
 
       <div className="field">
         <span>标签</span>
-        <div className="tag-picker-panel">
+        <div className="inline-tag-selector">
           <input
             value={tagSearchKeyword}
             onChange={(event) => onTagSearchChange(event.target.value)}
-            placeholder="搜索标签名或分类"
+            placeholder="搜索或新建标签..."
           />
-          <div className="tag-chip-cloud">
-            {selectableTags.length === 0 ? (
-              <p className="empty-message">暂无标签</p>
-            ) : (
-              selectableTags.map((tag) => (
-                <button
-                  className={
-                    form.tag_ids.includes(tag.id)
-                      ? "tag-manage-chip tag-manage-chip--selected"
-                      : "tag-manage-chip"
-                  }
-                  key={tag.id}
-                  style={tagChipStyle(tag)}
-                  type="button"
-                  onClick={() => toggleTag(tag.id)}
-                >
-                  <span
-                    className="tag-chip-color"
-                    style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
-                  />
-                  <span>#{tag.name}</span>
-                </button>
-              ))
-            )}
+
+          <div className="inline-tag-section">
+            <div className="inline-tag-section-title">
+              <span>已选标签</span>
+              <small>{selectedTags.length} 个</small>
+            </div>
+            <div className="tag-chip-cloud">
+              {selectedTags.length === 0 ? (
+                <p className="empty-message">还没有选择标签</p>
+              ) : (
+                selectedTags.map((tag) => (
+                  <button
+                    className="tag-manage-chip tag-manage-chip--selected inline-selected-tag"
+                    key={tag.id}
+                    style={tagChipStyle(tag)}
+                    type="button"
+                    onClick={() => onRemoveTag(tag.id)}
+                  >
+                    <span
+                      className="tag-chip-color"
+                      style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
+                    />
+                    <span>#{tag.name}</span>
+                    <span aria-hidden="true" className="tag-chip-remove">
+                      ×
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
+
+          <div className="inline-tag-section">
+            <div className="inline-tag-section-title">
+              <span>可选标签</span>
+              <small>{selectableTags.length} 个匹配</small>
+            </div>
+            <div className="tag-chip-cloud">
+              {selectableTags.length === 0 ? (
+                <p className="empty-message">
+                  {tagSearchKeyword.trim()
+                    ? "没有匹配的已有标签"
+                    : "暂无可选标签"}
+                </p>
+              ) : (
+                selectableTags.map((tag) => (
+                  <button
+                    className="tag-manage-chip"
+                    key={tag.id}
+                    style={tagChipStyle(tag)}
+                    type="button"
+                    onClick={() => toggleTag(tag.id)}
+                  >
+                    <span
+                      className="tag-chip-color"
+                      style={{ backgroundColor: tag.color ?? "#d6d0c7" }}
+                    />
+                    <span>#{tag.name}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {existingInlineTag && !form.tag_ids.includes(existingInlineTag.id) && (
+            <div className="inline-tag-create inline-tag-create--existing">
+              <div>
+                <strong>找到已有标签「{existingInlineTag.name}」</strong>
+                <p>点击即可加入当前卡片。</p>
+              </div>
+              <button type="button" onClick={() => toggleTag(existingInlineTag.id)}>
+                选中
+              </button>
+            </div>
+          )}
+
+          {canCreateInlineTag && (
+            <div className="inline-tag-create">
+              <div className="inline-tag-create-header">
+                <div>
+                  <strong>创建标签「{tagSearchKeyword.trim()}」</strong>
+                  <p>分类默认为自定义，创建后会自动选中。</p>
+                </div>
+                <span
+                  className="tag-chip"
+                  style={tagChipStyle({
+                    id: "preview",
+                    name: tagSearchKeyword.trim(),
+                    category: "custom",
+                    color: newTagColor,
+                    is_preset: false,
+                    created_at: "",
+                    updated_at: "",
+                  })}
+                >
+                  #{tagSearchKeyword.trim()}
+                </span>
+              </div>
+
+              <div className="inline-tag-create-controls">
+                <div className="tag-color-picker-main">
+                  <span
+                    aria-hidden="true"
+                    className="tag-color-preview-dot"
+                    style={{ backgroundColor: newTagColor }}
+                  />
+                  <label className="tag-color-native-button">
+                    调色盘
+                    <input
+                      type="color"
+                      value={newTagColor}
+                      onChange={(event) => onNewTagColorChange(event.target.value)}
+                    />
+                  </label>
+                  <span className="tag-color-value">{newTagColor}</span>
+                </div>
+                <div aria-label="常用标签颜色" className="tag-color-palette">
+                  {tagColorOptions.map((option) => (
+                    <button
+                      aria-label={`选择${option.label}`}
+                      className={
+                        newTagColor.toLowerCase() === option.value.toLowerCase()
+                          ? "tag-color-swatch selected"
+                          : "tag-color-swatch"
+                      }
+                      key={option.value}
+                      style={{ "--swatch-color": option.value } as CSSProperties}
+                      title={option.label}
+                      type="button"
+                      onClick={() => onNewTagColorChange(option.value)}
+                    >
+                      {newTagColor.toLowerCase() === option.value.toLowerCase() && (
+                        <span className="tag-color-check">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                className="secondary-button"
+                disabled={isCreatingInlineTag}
+                type="button"
+                onClick={onCreateInlineTag}
+              >
+                {isCreatingInlineTag ? "创建中..." : "创建并选中"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
