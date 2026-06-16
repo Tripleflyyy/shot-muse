@@ -19,6 +19,7 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
 
         CREATE TABLE IF NOT EXISTS inspiration_cards (
           id TEXT PRIMARY KEY,
+          card_type TEXT NOT NULL DEFAULT 'inspiration',
           title TEXT NOT NULL,
           source_platform TEXT NOT NULL,
           source_url TEXT,
@@ -138,6 +139,30 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
         "shooting_plans",
         "cover_media_asset_id",
         "ALTER TABLE shooting_plans ADD COLUMN cover_media_asset_id TEXT",
+    )?;
+
+    ensure_column(
+        connection,
+        "inspiration_cards",
+        "card_type",
+        "ALTER TABLE inspiration_cards ADD COLUMN card_type TEXT NOT NULL DEFAULT 'inspiration'",
+    )?;
+
+    connection.execute(
+        "
+        UPDATE inspiration_cards
+        SET card_type = 'inspiration'
+        WHERE card_type IS NULL OR trim(card_type) = ''
+        ",
+        [],
+    )?;
+
+    connection.execute(
+        "
+        CREATE INDEX IF NOT EXISTS idx_inspiration_cards_card_type
+        ON inspiration_cards(card_type)
+        ",
+        [],
     )?;
 
     Ok(())

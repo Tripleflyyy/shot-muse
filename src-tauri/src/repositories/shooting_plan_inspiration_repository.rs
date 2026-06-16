@@ -76,8 +76,9 @@ pub fn list_available_inspirations_for_shooting_plan(
 
     let cards = inspiration_repository::list_inspiration_cards(
         connection,
-        &InspirationCardFilters {
-            project_id: None,
+            &InspirationCardFilters {
+                card_type: None,
+                project_id: None,
             source_platform: source_platform.map(ToOwned::to_owned),
             keyword: keyword.map(ToOwned::to_owned),
             tag_ids: Some(Vec::new()),
@@ -191,6 +192,7 @@ mod tests {
         inspiration_repository::create_inspiration_card(
             connection,
             &InspirationCardPayload {
+                card_type: None,
                 title: title.into(),
                 source_platform: "xiaohongshu".into(),
                 source_url: Some("https://example.com".into()),

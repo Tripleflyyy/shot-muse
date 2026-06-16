@@ -10,8 +10,11 @@ export type SourcePlatform =
   | "instagram"
   | "other";
 
+export type CardType = "inspiration" | "technique";
+
 export type InspirationCard = {
   id: string;
+  card_type: CardType;
   title: string;
   source_platform: SourcePlatform;
   source_url: string | null;
@@ -26,6 +29,7 @@ export type InspirationCard = {
 };
 
 export type InspirationCardPayload = {
+  card_type?: CardType | null;
   title: string;
   source_platform: SourcePlatform;
   source_url?: string | null;
@@ -37,13 +41,15 @@ export type InspirationCardPayload = {
 };
 
 export type InspirationCardFilters = {
+  card_type?: CardType | "all" | null;
   project_id?: string | null;
   source_platform?: SourcePlatform | null;
   keyword?: string | null;
   tag_ids?: string[];
 };
 
-type RawInspirationCard = Omit<InspirationCard, "tags"> & {
+type RawInspirationCard = Omit<InspirationCard, "card_type" | "tags"> & {
+  card_type?: CardType | string;
   tags?: RawTag[];
 };
 
@@ -69,12 +75,12 @@ export async function updateInspirationCard(
 
 export async function deleteInspirationCard(id: string): Promise<boolean> {
   if (!id?.trim()) {
-    throw new Error("灵感卡片 ID 不能为空，无法删除");
+    throw new Error("卡片 ID 不能为空，无法删除");
   }
 
   const deleted = await invoke<boolean>("delete_inspiration_card", { id });
   if (!deleted) {
-    throw new Error("未找到要删除的灵感卡片");
+    throw new Error("未找到要删除的卡片");
   }
   return deleted;
 }
@@ -147,6 +153,10 @@ export async function listProjectInspirations(
 function normalizeInspirationCard(card: RawInspirationCard): InspirationCard {
   return {
     ...card,
+    card_type:
+      card.card_type === "technique" || card.card_type === "inspiration"
+        ? card.card_type
+        : "inspiration",
     tags: (card.tags ?? []).map(normalizeTag),
   };
 }
