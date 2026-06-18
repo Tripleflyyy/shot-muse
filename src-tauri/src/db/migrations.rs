@@ -26,6 +26,7 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
           author_name TEXT,
           notes TEXT,
           project_id TEXT,
+          cover_media_asset_id TEXT,
           collected_at TEXT NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
@@ -98,6 +99,7 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
           file_size INTEGER,
           width INTEGER,
           height INTEGER,
+          sort_order INTEGER NOT NULL DEFAULT 0,
           source_type TEXT NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
@@ -146,6 +148,20 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
         "inspiration_cards",
         "card_type",
         "ALTER TABLE inspiration_cards ADD COLUMN card_type TEXT NOT NULL DEFAULT 'inspiration'",
+    )?;
+
+    ensure_column(
+        connection,
+        "inspiration_cards",
+        "cover_media_asset_id",
+        "ALTER TABLE inspiration_cards ADD COLUMN cover_media_asset_id TEXT",
+    )?;
+
+    ensure_column(
+        connection,
+        "media_assets",
+        "sort_order",
+        "ALTER TABLE media_assets ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
     )?;
 
     connection.execute(

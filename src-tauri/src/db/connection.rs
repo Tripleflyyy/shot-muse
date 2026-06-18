@@ -92,6 +92,24 @@ mod tests {
             inspiration_columns.iter().any(|column| column == "card_type"),
             "inspiration_cards should include card_type"
         );
+        assert!(
+            inspiration_columns
+                .iter()
+                .any(|column| column == "cover_media_asset_id"),
+            "inspiration_cards should include cover_media_asset_id"
+        );
+
+        let media_columns = connection
+            .prepare("PRAGMA table_info(media_assets)")
+            .expect("prepare media table info")
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("read media table info")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("collect media columns");
+        assert!(
+            media_columns.iter().any(|column| column == "sort_order"),
+            "media_assets should include sort_order"
+        );
 
         fs::remove_dir_all(temp_dir).expect("temporary database directory is removed");
     }

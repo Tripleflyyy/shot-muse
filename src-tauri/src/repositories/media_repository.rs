@@ -8,6 +8,11 @@ pub fn create_media_asset(
     payload: &MediaAssetPayload,
 ) -> rusqlite::Result<MediaAsset> {
     let id = Uuid::new_v4().to_string();
+    let sort_order = next_sort_order(
+        connection,
+        payload.target_type.trim(),
+        normalize_optional_text(&payload.target_id).as_deref(),
+    )?;
 
     connection.execute(
         "
@@ -21,6 +26,7 @@ pub fn create_media_asset(
           file_size,
           width,
           height,
+          sort_order,
           source_type,
           created_at,
           updated_at
@@ -36,6 +42,7 @@ pub fn create_media_asset(
           ?8,
           ?9,
           ?10,
+          ?11,
           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
           strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         )
@@ -50,6 +57,7 @@ pub fn create_media_asset(
             payload.file_size,
             payload.width,
             payload.height,
+            sort_order,
             payload.source_type.trim(),
         ],
     )?;
@@ -71,6 +79,7 @@ pub fn get_media_asset(connection: &Connection, id: &str) -> rusqlite::Result<Op
               file_size,
               width,
               height,
+              sort_order,
               source_type,
               created_at,
               updated_at
@@ -99,11 +108,12 @@ pub fn list_media_assets(
           file_size,
           width,
           height,
+          sort_order,
           source_type,
           created_at,
           updated_at
         FROM media_assets
-        ORDER BY created_at DESC
+        ORDER BY target_type ASC, target_id ASC, sort_order ASC, created_at ASC
         ",
     )?;
 
@@ -182,8 +192,72 @@ pub fn update_media_asset_target(
 }
 
 pub fn delete_media_asset(connection: &Connection, id: &str) -> rusqlite::Result<bool> {
+    connection.execute(
+        "
+        UPDATE inspiration_cards
+        SET
+          cover_media_asset_id = NULL,
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE cover_media_asset_id = ?1
+        ",
+        [id],
+    )?;
+
     let deleted_count = connection.execute("DELETE FROM media_assets WHERE id = ?1", [id])?;
     Ok(deleted_count > 0)
+}
+
+pub fn reorder_media_assets(
+    connection: &Connection,
+    target_type: &str,
+    target_id: &str,
+    ordered_media_asset_ids: &[String],
+) -> rusqlite::Result<Vec<MediaAsset>> {
+    for (index, media_asset_id) in ordered_media_asset_ids.iter().enumerate() {
+        let updated_count = connection.execute(
+            "
+            UPDATE media_assets
+            SET
+              sort_order = ?4,
+              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?1
+              AND target_type = ?2
+              AND target_id = ?3
+            ",
+            params![
+                media_asset_id.trim(),
+                target_type.trim(),
+                target_id.trim(),
+                index as i64,
+            ],
+        )?;
+
+        if updated_count == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+    }
+
+    list_media_assets_by_target(connection, target_type, target_id)
+}
+
+fn next_sort_order(
+    connection: &Connection,
+    target_type: &str,
+    target_id: Option<&str>,
+) -> rusqlite::Result<i64> {
+    connection.query_row(
+        "
+        SELECT COALESCE(MAX(sort_order), -1) + 1
+        FROM media_assets
+        WHERE target_type = ?1
+          AND (
+            (target_id IS NULL AND ?2 IS NULL)
+            OR target_id = ?2
+          )
+        ",
+        params![target_type, target_id],
+        |row| row.get(0),
+    )
 }
 
 fn map_media_asset(row: &rusqlite::Row<'_>) -> rusqlite::Result<MediaAsset> {
@@ -197,9 +271,10 @@ fn map_media_asset(row: &rusqlite::Row<'_>) -> rusqlite::Result<MediaAsset> {
         file_size: row.get(6)?,
         width: row.get(7)?,
         height: row.get(8)?,
-        source_type: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        sort_order: row.get(9)?,
+        source_type: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
     })
 }
 
@@ -250,6 +325,7 @@ mod tests {
         assert_eq!(created.target_id.as_deref(), Some("inspiration-1"));
         assert_eq!(created.file_path, "/media/inspiration/test.jpg");
         assert_eq!(created.source_type, "file_picker");
+        assert_eq!(created.sort_order, 0);
 
         let fetched = get_media_asset(&connection, &created.id)
             .expect("get media asset")
@@ -287,6 +363,82 @@ mod tests {
         assert!(get_media_asset(&connection, &created.id)
             .expect("get after delete")
             .is_none());
+    }
+
+    #[test]
+    fn sort_order_reorder_and_cover_cleanup_work() {
+        let connection = test_connection();
+        connection
+            .execute(
+                "
+                INSERT INTO inspiration_cards (
+                  id,
+                  card_type,
+                  title,
+                  source_platform,
+                  collected_at,
+                  created_at,
+                  updated_at
+                )
+                VALUES (
+                  'card-1',
+                  'inspiration',
+                  '测试卡片',
+                  'xiaohongshu',
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                )
+                ",
+                [],
+            )
+            .expect("insert card");
+
+        let first = create_media_asset(&connection, &payload()).expect("create first");
+        let second = create_media_asset(&connection, &payload()).expect("create second");
+        assert_eq!(first.sort_order, 0);
+        assert_eq!(second.sort_order, 1);
+
+        let reordered = reorder_media_assets(
+            &connection,
+            "inspiration",
+            "inspiration-1",
+            &[second.id.clone(), first.id.clone()],
+        )
+        .expect("reorder media assets");
+        assert_eq!(reordered[0].id, second.id);
+        assert_eq!(reordered[0].sort_order, 0);
+        assert_eq!(reordered[1].id, first.id);
+        assert_eq!(reordered[1].sort_order, 1);
+
+        assert!(reorder_media_assets(
+            &connection,
+            "project",
+            "other-target",
+            &[second.id.clone()]
+        )
+        .is_err());
+
+        connection
+            .execute(
+                "
+                UPDATE inspiration_cards
+                SET cover_media_asset_id = ?1
+                WHERE id = 'card-1'
+                ",
+                [&second.id],
+            )
+            .expect("set card cover");
+        assert!(delete_media_asset(&connection, &second.id).expect("delete cover media"));
+
+        let cover_media_asset_id: Option<String> = connection
+            .query_row(
+                "SELECT cover_media_asset_id FROM inspiration_cards WHERE id = 'card-1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read cleared cover");
+        assert!(cover_media_asset_id.is_none());
     }
 
     #[test]

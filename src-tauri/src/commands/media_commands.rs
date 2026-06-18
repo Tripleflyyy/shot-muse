@@ -127,6 +127,46 @@ pub fn delete_media_asset(state: State<'_, AppState>, id: String) -> Result<bool
 }
 
 #[tauri::command]
+pub fn reorder_media_assets(
+    state: State<'_, AppState>,
+    target_type: String,
+    target_id: String,
+    ordered_media_asset_ids: Vec<String>,
+) -> Result<Vec<MediaAsset>, String> {
+    validate_target_type(&target_type)?;
+    if target_id.trim().is_empty() {
+        return Err("目标 ID 不能为空".to_string());
+    }
+
+    let ordered_media_asset_ids = normalized_ids(&ordered_media_asset_ids);
+    if ordered_media_asset_ids.is_empty() {
+        return Err("图片排序参数不合法".to_string());
+    }
+
+    state
+        .with_connection(|connection| {
+            for media_asset_id in &ordered_media_asset_ids {
+                let media_asset = media_repository::get_media_asset(connection, media_asset_id)?
+                    .ok_or_else(|| validation_error("图片不存在"))?;
+
+                if media_asset.target_type != target_type.trim()
+                    || media_asset.target_id.as_deref() != Some(target_id.trim())
+                {
+                    return Err(validation_error("图片不属于当前对象"));
+                }
+            }
+
+            media_repository::reorder_media_assets(
+                connection,
+                target_type.trim(),
+                target_id.trim(),
+                &ordered_media_asset_ids,
+            )
+        })
+        .map_err(command_error)
+}
+
+#[tauri::command]
 pub fn import_local_image(
     state: State<'_, AppState>,
     source_path: String,
@@ -338,6 +378,17 @@ fn normalize_optional_string(value: Option<String>) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn normalized_ids(ids: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for id in ids {
+        let id = id.trim();
+        if !id.is_empty() && !normalized.iter().any(|existing| existing == id) {
+            normalized.push(id.to_string());
+        }
+    }
+    normalized
 }
 
 fn command_error(error: rusqlite::Error) -> String {

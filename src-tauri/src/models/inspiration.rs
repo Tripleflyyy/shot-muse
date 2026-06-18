@@ -13,6 +13,7 @@ pub struct InspirationCard {
     pub notes: Option<String>,
     pub project_id: Option<String>,
     pub project_name: Option<String>,
+    pub cover_media_asset_id: Option<String>,
     pub collected_at: String,
     pub created_at: String,
     pub updated_at: String,

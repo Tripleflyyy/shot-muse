@@ -11,6 +11,7 @@ import {
   listInspirationCards,
   SourcePlatform,
   updateInspirationCard,
+  updateInspirationCardCover,
 } from "../services/inspirationApi";
 import {
   deleteMediaAsset,
@@ -18,6 +19,7 @@ import {
   importLocalImage,
   listMediaAssetsByTarget,
   MediaAsset,
+  reorderMediaAssets,
 } from "../services/mediaApi";
 import { createCustomTag, listTags, Tag, TagCategory } from "../services/tagApi";
 
@@ -131,6 +133,7 @@ export default function InspirationLibraryPage() {
   const [importingCardId, setImportingCardId] = useState<string | null>(null);
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [carouselIndexes, setCarouselIndexes] = useState<Record<string, number>>({});
+  const [activeMediaAssetId, setActiveMediaAssetId] = useState<string | null>(null);
 
   const selectedTags = useMemo(
     () =>
@@ -185,7 +188,7 @@ export default function InspirationLibraryPage() {
       return;
     }
 
-    const images = cardMedia[hoveredCardId] ?? [];
+    const images = sortedMediaAssets(cardMedia[hoveredCardId] ?? []);
     if (images.length <= 1) {
       return;
     }
@@ -262,6 +265,7 @@ export default function InspirationLibraryPage() {
     setPendingRemoveMedia(null);
     setPendingCreateImages([]);
     setSelectedCard(null);
+    setActiveMediaAssetId(null);
     setIsEditingDetail(false);
     setModalMode("create");
   }
@@ -274,6 +278,7 @@ export default function InspirationLibraryPage() {
     setPendingDeleteCard(null);
     setPendingRemoveMedia(null);
     setPendingCreateImages([]);
+    setActiveMediaAssetId(defaultActiveMediaAssetId(card, cardMedia[card.id] ?? []));
     setIsEditingDetail(false);
     setModalMode("detail");
   }
@@ -286,6 +291,7 @@ export default function InspirationLibraryPage() {
     setPendingRemoveMedia(null);
     setImageActionStatus(null);
     setPendingCreateImages([]);
+    setActiveMediaAssetId(null);
     setTagSearchKeyword("");
     setNewTagColor(tagColorOptions[0].value);
     setForm(emptyForm);
@@ -422,8 +428,9 @@ export default function InspirationLibraryPage() {
       }
 
       setImportingCardId(card.id);
-      await importLocalImage(sourcePath, "inspiration", card.id);
+      const imported = await importLocalImage(sourcePath, "inspiration", card.id);
       await refreshCardMedia(card.id);
+      setActiveMediaAssetId(imported.id);
       setImageActionStatus({
         cardId: card.id,
         message: "图片导入成功",
@@ -519,6 +526,10 @@ export default function InspirationLibraryPage() {
       await deleteMediaAsset(asset.id);
       setPendingRemoveMedia(null);
       await refreshCardMedia(cardId);
+      if (activeMediaAssetId === asset.id) {
+        const remaining = (cardMedia[cardId] ?? []).filter((item) => item.id !== asset.id);
+        setActiveMediaAssetId(defaultActiveMediaAssetId(selectedCard, remaining));
+      }
       setImageActionStatus({
         cardId,
         message: "图片已从卡片移除",
@@ -605,12 +616,75 @@ export default function InspirationLibraryPage() {
 
   function handleCardHover(cardId: string) {
     setHoveredCardId(cardId);
-    setCarouselIndexes((current) => ({ ...current, [cardId]: 0 }));
+    const card = cards.find((item) => item.id === cardId);
+    const mediaAssets = sortedMediaAssets(cardMedia[cardId] ?? []);
+    setCarouselIndexes((current) => ({
+      ...current,
+      [cardId]: coverIndexForCard(card, mediaAssets),
+    }));
   }
 
   function handleCardLeave(cardId: string) {
     setHoveredCardId((current) => (current === cardId ? null : current));
     setCarouselIndexes((current) => ({ ...current, [cardId]: 0 }));
+  }
+
+  async function handleSetCardCover(asset: MediaAsset) {
+    if (!selectedCard) {
+      return;
+    }
+
+    try {
+      const updated = await updateInspirationCardCover(selectedCard.id, asset.id);
+      replaceCard(updated);
+      setActiveMediaAssetId(asset.id);
+    } catch (error) {
+      console.error("设置卡片封面失败", error);
+      alert(toErrorMessage(error, "设置卡片封面失败"));
+    }
+  }
+
+  async function handleMoveMedia(asset: MediaAsset, direction: -1 | 1) {
+    if (!selectedCard) {
+      return;
+    }
+
+    const mediaAssets = sortedMediaAssets(cardMedia[selectedCard.id] ?? []);
+    const currentIndex = mediaAssets.findIndex((item) => item.id === asset.id);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= mediaAssets.length) {
+      return;
+    }
+
+    const nextMediaAssets = [...mediaAssets];
+    const [moved] = nextMediaAssets.splice(currentIndex, 1);
+    nextMediaAssets.splice(nextIndex, 0, moved);
+
+    try {
+      const reordered = await reorderMediaAssets(
+        "inspiration",
+        selectedCard.id,
+        nextMediaAssets.map((item) => item.id),
+      );
+      setCardMedia((current) => ({
+        ...current,
+        [selectedCard.id]: reordered,
+      }));
+      setActiveMediaAssetId(asset.id);
+    } catch (error) {
+      console.error("调整图片顺序失败", error);
+      alert(toErrorMessage(error, "调整图片顺序失败"));
+    }
+  }
+
+  function replaceCard(updated: InspirationCard) {
+    setCards((current) =>
+      current.map((card) => (card.id === updated.id ? updated : card)),
+    );
+    setSelectedCard((current) =>
+      current?.id === updated.id ? updated : current,
+    );
   }
 
   return (
@@ -709,6 +783,7 @@ export default function InspirationLibraryPage() {
                 card={card}
                 carouselIndex={carouselIndexes[card.id] ?? 0}
                 key={card.id}
+                isHovered={hoveredCardId === card.id}
                 mediaAssets={cardMedia[card.id] ?? []}
                 onHover={() => handleCardHover(card.id)}
                 onLeave={() => handleCardLeave(card.id)}
@@ -759,6 +834,7 @@ export default function InspirationLibraryPage() {
               {modalMode === "create" || isEditingDetail ? (
                 <CardForm
                   form={form}
+                  coverMediaAssetId={selectedCard?.cover_media_asset_id ?? null}
                   imageActionStatus={imageActionStatus}
                   importingCardId={importingCardId}
                   isCreate={modalMode === "create"}
@@ -776,6 +852,7 @@ export default function InspirationLibraryPage() {
                   onRemoveMedia={selectedCard ? requestRemoveMedia : undefined}
                   onSubmit={handleSubmit}
                   pendingRemoveMedia={pendingRemoveMedia}
+                  activeMediaAssetId={activeMediaAssetId}
                   canCreateInlineTag={canCreateInlineTag}
                   existingInlineTag={existingInlineTag}
                   isCreatingInlineTag={isCreatingInlineTag}
@@ -786,8 +863,11 @@ export default function InspirationLibraryPage() {
                   tagSearchKeyword={tagSearchKeyword}
                   toggleTag={toggleFormTag}
                   onConfirmRemoveMedia={() => void confirmRemoveMedia()}
+                  onMoveMedia={(asset, direction) => void handleMoveMedia(asset, direction)}
                   onNewTagColorChange={setNewTagColor}
                   onRemoveTag={removeFormTag}
+                  onSelectMedia={setActiveMediaAssetId}
+                  onSetCover={(asset) => void handleSetCardCover(asset)}
                   onTagSearchChange={setTagSearchKeyword}
                 />
               ) : selectedCard ? (
@@ -796,9 +876,13 @@ export default function InspirationLibraryPage() {
                   imageActionStatus={imageActionStatus}
                   importingCardId={importingCardId}
                   mediaAssets={selectedCardMedia}
+                  activeMediaAssetId={activeMediaAssetId}
                   onAddImage={() => void handleAddImage(selectedCard)}
                   onDelete={() => requestDeleteCard(selectedCard)}
+                  onMoveMedia={(asset, direction) => void handleMoveMedia(asset, direction)}
                   onRemoveMedia={requestRemoveMedia}
+                  onSelectMedia={setActiveMediaAssetId}
+                  onSetCover={(asset) => void handleSetCardCover(asset)}
                   pendingDeleteCard={pendingDeleteCard}
                   pendingRemoveMedia={pendingRemoveMedia}
                   onCancelDelete={() => setPendingDeleteCard(null)}
@@ -818,6 +902,7 @@ export default function InspirationLibraryPage() {
 function CardLibraryTile({
   card,
   carouselIndex,
+  isHovered,
   mediaAssets,
   onHover,
   onLeave,
@@ -825,14 +910,18 @@ function CardLibraryTile({
 }: {
   card: InspirationCard;
   carouselIndex: number;
+  isHovered: boolean;
   mediaAssets: MediaAsset[];
   onHover: () => void;
   onLeave: () => void;
   onOpen: () => void;
 }) {
-  const coverIndex =
-    mediaAssets.length > 0 ? Math.min(carouselIndex, mediaAssets.length - 1) : 0;
-  const cover = mediaAssets[coverIndex];
+  const orderedMediaAssets = sortedMediaAssets(mediaAssets);
+  const manualCoverIndex = coverIndexForCard(card, orderedMediaAssets);
+  const visibleIndex = isHovered
+    ? Math.min(carouselIndex, Math.max(orderedMediaAssets.length - 1, 0))
+    : manualCoverIndex;
+  const cover = orderedMediaAssets[visibleIndex];
 
   return (
     <button
@@ -846,8 +935,8 @@ function CardLibraryTile({
     >
       <CardCover
         asset={cover}
-        imageCount={mediaAssets.length}
-        imageIndex={coverIndex}
+        imageCount={orderedMediaAssets.length}
+        imageIndex={visibleIndex}
         title={card.title}
       />
       <span className={`card-type-badge card-type-badge--${card.card_type}`}>
@@ -932,10 +1021,12 @@ function CardCover({
 }
 
 function CardForm({
+  coverMediaAssetId,
   form,
   imageActionStatus,
   importingCardId,
   isCreate,
+  activeMediaAssetId,
   canCreateInlineTag,
   existingInlineTag,
   isCreatingInlineTag,
@@ -948,10 +1039,13 @@ function CardForm({
   onChange,
   onCreateInlineTag,
   onConfirmRemoveMedia,
+  onMoveMedia,
   onNewTagColorChange,
   onRemoveMedia,
   onRemovePendingCreateImage,
   onRemoveTag,
+  onSelectMedia,
+  onSetCover,
   onSubmit,
   pendingRemoveMedia,
   selectableTags,
@@ -960,10 +1054,12 @@ function CardForm({
   toggleTag,
   onTagSearchChange,
 }: {
+  coverMediaAssetId: string | null;
   form: CardFormState;
   imageActionStatus: { cardId: string; message: string } | null;
   importingCardId: string | null;
   isCreate: boolean;
+  activeMediaAssetId: string | null;
   canCreateInlineTag: boolean;
   existingInlineTag: Tag | null;
   isCreatingInlineTag: boolean;
@@ -976,10 +1072,13 @@ function CardForm({
   onChange: (updater: CardFormState | ((current: CardFormState) => CardFormState)) => void;
   onCreateInlineTag: () => void;
   onConfirmRemoveMedia: () => void;
+  onMoveMedia: (asset: MediaAsset, direction: -1 | 1) => void;
   onNewTagColorChange: (color: string) => void;
   onRemoveMedia?: (cardId: string, asset: MediaAsset) => void;
   onRemovePendingCreateImage: (sourcePath: string) => void;
   onRemoveTag: (tagId: string) => void;
+  onSelectMedia: (mediaAssetId: string) => void;
+  onSetCover: (asset: MediaAsset) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   pendingRemoveMedia: { cardId: string; asset: MediaAsset } | null;
   selectableTags: Tag[];
@@ -1265,10 +1364,15 @@ function CardForm({
           />
         ) : (
           <CardMediaStrip
+            activeMediaAssetId={activeMediaAssetId}
+            coverMediaAssetId={coverMediaAssetId}
             imageActionStatus={imageActionStatus}
             mediaAssets={mediaAssets}
             onConfirmRemoveMedia={onConfirmRemoveMedia}
+            onMoveMedia={onMoveMedia}
             onRemoveMedia={onRemoveMedia}
+            onSelectMedia={onSelectMedia}
+            onSetCover={onSetCover}
             pendingRemoveMedia={pendingRemoveMedia}
           />
         )}
@@ -1347,6 +1451,7 @@ function PendingCreateImageStrip({
 
 function CardDetail({
   card,
+  activeMediaAssetId,
   imageActionStatus,
   importingCardId,
   mediaAssets,
@@ -1356,11 +1461,15 @@ function CardDetail({
   onConfirmDelete,
   onConfirmRemoveMedia,
   onDelete,
+  onMoveMedia,
   onRemoveMedia,
+  onSelectMedia,
+  onSetCover,
   pendingDeleteCard,
   pendingRemoveMedia,
 }: {
   card: InspirationCard;
+  activeMediaAssetId: string | null;
   imageActionStatus: { cardId: string; message: string } | null;
   importingCardId: string | null;
   mediaAssets: MediaAsset[];
@@ -1370,7 +1479,10 @@ function CardDetail({
   onConfirmDelete: () => void;
   onConfirmRemoveMedia: () => void;
   onDelete: () => void;
+  onMoveMedia: (asset: MediaAsset, direction: -1 | 1) => void;
   onRemoveMedia: (cardId: string, asset: MediaAsset) => void;
+  onSelectMedia: (mediaAssetId: string) => void;
+  onSetCover: (asset: MediaAsset) => void;
   pendingDeleteCard: InspirationCard | null;
   pendingRemoveMedia: { cardId: string; asset: MediaAsset } | null;
 }) {
@@ -1396,11 +1508,16 @@ function CardDetail({
           </button>
         </div>
         <CardMediaStrip
+          activeMediaAssetId={activeMediaAssetId}
+          coverMediaAssetId={card.cover_media_asset_id}
           imageActionStatus={imageActionStatus}
           mediaAssets={mediaAssets}
           onCancelRemoveMedia={onCancelRemoveMedia}
           onConfirmRemoveMedia={onConfirmRemoveMedia}
+          onMoveMedia={onMoveMedia}
           onRemoveMedia={onRemoveMedia}
+          onSelectMedia={onSelectMedia}
+          onSetCover={onSetCover}
           pendingRemoveMedia={pendingRemoveMedia}
         />
       </section>
@@ -1469,63 +1586,173 @@ function CardDetail({
 }
 
 function CardMediaStrip({
+  activeMediaAssetId,
+  coverMediaAssetId,
   imageActionStatus,
   mediaAssets,
   onCancelRemoveMedia,
   onConfirmRemoveMedia,
+  onMoveMedia,
   onRemoveMedia,
+  onSelectMedia,
+  onSetCover,
   pendingRemoveMedia,
 }: {
+  activeMediaAssetId: string | null;
+  coverMediaAssetId: string | null;
   imageActionStatus: { cardId: string; message: string } | null;
   mediaAssets: MediaAsset[];
   onCancelRemoveMedia?: () => void;
   onConfirmRemoveMedia: () => void;
+  onMoveMedia: (asset: MediaAsset, direction: -1 | 1) => void;
   onRemoveMedia?: (cardId: string, asset: MediaAsset) => void;
+  onSelectMedia: (mediaAssetId: string) => void;
+  onSetCover: (asset: MediaAsset) => void;
   pendingRemoveMedia: { cardId: string; asset: MediaAsset } | null;
 }) {
+  const orderedMediaAssets = sortedMediaAssets(mediaAssets);
+  const activeIndex = Math.max(
+    orderedMediaAssets.findIndex((asset) => asset.id === activeMediaAssetId),
+    0,
+  );
+  const activeAsset = orderedMediaAssets[activeIndex];
+
   return (
     <>
       {imageActionStatus && (
         <p className="media-action-status">{imageActionStatus.message}</p>
       )}
 
-      {mediaAssets.length === 0 ? (
+      {orderedMediaAssets.length === 0 ? (
         <p className="media-empty">暂无图片</p>
       ) : (
-        <div className="card-media-strip">
-          {mediaAssets.map((asset) => {
+        <div className="card-media-gallery">
+          {activeAsset && (
+            <div className="card-media-main">
+              <button
+                aria-label="上一张图片"
+                className="gallery-nav-button gallery-nav-button--left"
+                disabled={activeIndex === 0}
+                type="button"
+                onClick={() => onSelectMedia(orderedMediaAssets[activeIndex - 1].id)}
+              >
+                ‹
+              </button>
+              <div className="card-media-main-image">
+                <img
+                  alt={activeAsset.original_filename ?? "卡片图片"}
+                  src={getMediaAssetDisplayUrl(activeAsset)}
+                  onError={(event) => {
+                    console.error("main image load failed", {
+                      filePath: activeAsset.file_path,
+                      asset: activeAsset,
+                    });
+                    event.currentTarget.classList.add("is-broken");
+                    event.currentTarget
+                      .closest(".card-media-main-image")
+                      ?.classList.add("is-broken");
+                  }}
+                />
+                <span className="media-load-fallback">图片加载失败</span>
+                <span className="card-library-image-count">
+                  {activeIndex + 1} / {orderedMediaAssets.length}
+                </span>
+                {coverMediaAssetId === activeAsset.id && (
+                  <span className="media-cover-badge">当前封面</span>
+                )}
+              </div>
+              <button
+                aria-label="下一张图片"
+                className="gallery-nav-button gallery-nav-button--right"
+                disabled={activeIndex >= orderedMediaAssets.length - 1}
+                type="button"
+                onClick={() => onSelectMedia(orderedMediaAssets[activeIndex + 1].id)}
+              >
+                ›
+              </button>
+            </div>
+          )}
+
+          <div className="card-media-active-actions">
+            {activeAsset && (
+              <>
+                <span>{activeAsset.original_filename ?? "本地图片"}</span>
+                <button
+                  type="button"
+                  disabled={coverMediaAssetId === activeAsset.id}
+                  onClick={() => onSetCover(activeAsset)}
+                >
+                  {coverMediaAssetId === activeAsset.id ? "已是封面" : "设为封面"}
+                </button>
+                <button
+                  type="button"
+                  disabled={activeIndex === 0}
+                  onClick={() => onMoveMedia(activeAsset, -1)}
+                >
+                  ← 左移
+                </button>
+                <button
+                  type="button"
+                  disabled={activeIndex >= orderedMediaAssets.length - 1}
+                  onClick={() => onMoveMedia(activeAsset, 1)}
+                >
+                  右移 →
+                </button>
+                {onRemoveMedia && (
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => onRemoveMedia(activeAsset.target_id ?? "", activeAsset)}
+                  >
+                    移除
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="card-media-strip">
+            {orderedMediaAssets.map((asset, index) => {
             const displayUrl = getMediaAssetDisplayUrl(asset);
             return (
-              <div className="media-thumb-item card-media-strip-item" key={asset.id}>
-                <div className="media-thumb-image-wrap">
-                  <img
-                    alt={asset.original_filename ?? "卡片图片"}
-                    src={displayUrl}
-                    onError={(event) => {
-                      console.error("image load failed", {
-                        filePath: asset.file_path,
-                        displayUrl,
-                        asset,
-                      });
-                      event.currentTarget.classList.add("is-broken");
-                      event.currentTarget
-                        .closest(".media-thumb-image-wrap")
-                        ?.classList.add("is-broken");
-                    }}
-                  />
-                  <span className="media-load-fallback">图片加载失败</span>
-                </div>
+              <div
+                className={
+                  activeAsset?.id === asset.id
+                    ? "media-thumb-item card-media-strip-item is-active"
+                    : "media-thumb-item card-media-strip-item"
+                }
+                key={asset.id}
+              >
+                <button
+                  className="media-thumb-select"
+                  type="button"
+                  onClick={() => onSelectMedia(asset.id)}
+                >
+                  <div className="media-thumb-image-wrap">
+                    <img
+                      alt={asset.original_filename ?? "卡片图片"}
+                      src={displayUrl}
+                      onError={(event) => {
+                        console.error("image load failed", {
+                          filePath: asset.file_path,
+                          displayUrl,
+                          asset,
+                        });
+                        event.currentTarget.classList.add("is-broken");
+                        event.currentTarget
+                          .closest(".media-thumb-image-wrap")
+                          ?.classList.add("is-broken");
+                      }}
+                    />
+                    <span className="media-load-fallback">图片加载失败</span>
+                    <span className="media-thumb-index">{index + 1}</span>
+                    {coverMediaAssetId === asset.id && (
+                      <span className="media-thumb-cover-badge">封面</span>
+                    )}
+                  </div>
+                </button>
                 <div className="media-thumb-meta">
                   <span>{asset.original_filename ?? "本地图片"}</span>
-                  {onRemoveMedia && (
-                    <button
-                      className="text-button"
-                      type="button"
-                      onClick={() => onRemoveMedia(asset.target_id ?? "", asset)}
-                    >
-                      移除
-                    </button>
-                  )}
                 </div>
 
                 {pendingRemoveMedia?.asset.id === asset.id && (
@@ -1554,6 +1781,7 @@ function CardMediaStrip({
               </div>
             );
           })}
+          </div>
         </div>
       )}
     </>
@@ -1571,6 +1799,53 @@ function toPayload(form: CardFormState): InspirationCardPayload {
     project_id: null,
     tag_ids: form.tag_ids,
   };
+}
+
+function sortedMediaAssets(mediaAssets: MediaAsset[]): MediaAsset[] {
+  return [...mediaAssets].sort((first, second) => {
+    if (first.sort_order !== second.sort_order) {
+      return first.sort_order - second.sort_order;
+    }
+
+    return first.created_at.localeCompare(second.created_at);
+  });
+}
+
+function coverMediaAsset(
+  card: InspirationCard | null | undefined,
+  mediaAssets: MediaAsset[],
+): MediaAsset | undefined {
+  const orderedMediaAssets = sortedMediaAssets(mediaAssets);
+  if (!card) {
+    return orderedMediaAssets[0];
+  }
+
+  return (
+    orderedMediaAssets.find((asset) => asset.id === card.cover_media_asset_id) ??
+    orderedMediaAssets[0]
+  );
+}
+
+function coverIndexForCard(
+  card: InspirationCard | null | undefined,
+  mediaAssets: MediaAsset[],
+): number {
+  const cover = coverMediaAsset(card, mediaAssets);
+  if (!cover) {
+    return 0;
+  }
+
+  return Math.max(
+    mediaAssets.findIndex((asset) => asset.id === cover.id),
+    0,
+  );
+}
+
+function defaultActiveMediaAssetId(
+  card: InspirationCard | null | undefined,
+  mediaAssets: MediaAsset[],
+): string | null {
+  return coverMediaAsset(card, mediaAssets)?.id ?? null;
 }
 
 function formFromCard(card: InspirationCard): CardFormState {
