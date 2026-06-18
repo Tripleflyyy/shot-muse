@@ -903,19 +903,23 @@ export default function ShootingPlanPage() {
 
   return (
     <section className="page-frame">
-      <header className="page-header">
-        <p className="page-kicker">Plans</p>
-        <h1 className="page-title">Shooting Plans</h1>
-        <p className="page-copy">
-          为已有摄影项目创建可执行拍摄计划，整理器材、场景、动作、构图、光线和后期方向。
-        </p>
+      <header className="page-header plans-page-header">
+        <div className="plans-page-header-main">
+          <p className="page-kicker">Plans</p>
+          <h1 className="page-title">Shooting Plans</h1>
+          <p className="page-copy">
+            为已有摄影项目创建可执行拍摄计划，整理器材、场景、动作、构图、光线和后期方向。
+          </p>
+        </div>
+        <div className="plans-page-actions">
+          <button className="primary-button new-plan-button" type="button" onClick={openNewPlanModal}>
+            + New Plan
+          </button>
+        </div>
       </header>
 
       <section className="plans-workspace">
         <div className="plans-toolbar">
-          <button className="primary-button new-plan-button" type="button" onClick={openNewPlanModal}>
-            + New Plan
-          </button>
           <form className="search-filter-panel plans-filter-panel" onSubmit={handleFilter}>
             <div className="filter-panel-title">
               <strong>筛选拍摄计划</strong>

@@ -18,6 +18,7 @@ export type MediaAsset = {
   file_size: number | null;
   width: number | null;
   height: number | null;
+  sort_order: number;
   source_type: MediaSourceType;
   created_at: string;
   updated_at: string;
@@ -112,6 +113,18 @@ export async function importShootingPlanImage(
     sourcePath,
     shootingPlanId,
     setAsCover,
+  });
+}
+
+export async function reorderMediaAssets(
+  targetType: MediaTargetType,
+  targetId: string,
+  orderedMediaAssetIds: string[],
+): Promise<MediaAsset[]> {
+  return invoke<MediaAsset[]>("reorder_media_assets", {
+    targetType,
+    targetId,
+    orderedMediaAssetIds,
   });
 }
 

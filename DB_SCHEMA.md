@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS inspiration_cards (
   author_name TEXT,
   notes TEXT,
   project_id TEXT,
+  cover_media_asset_id TEXT,
   collected_at TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -107,6 +108,8 @@ card_type 当前允许值：
 - technique
 
 说明：历史卡片默认 `inspiration`。P0-11 后，卡片库页面通过该字段提供“全部 / 灵感 / 技巧”视图；当前仍不重命名 `inspiration_cards`。
+
+`cover_media_asset_id` 可为空。为空时，卡片墙使用该卡片按 `sort_order ASC, created_at ASC` 排序后的第一张图片作为封面；非空时业务层校验对应 media asset 属于当前卡片。
 
 ## 4. technique_cards 表
 
@@ -277,6 +280,7 @@ CREATE TABLE IF NOT EXISTS media_assets (
   file_size INTEGER,
   width INTEGER,
   height INTEGER,
+  sort_order INTEGER NOT NULL DEFAULT 0,
   source_type TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -301,7 +305,8 @@ source_type 枚举建议：
 - target_id 可为空，用于支持“先上传图片，再保存卡片”的表单流程
 - 卡片保存后，应将 media_assets.target_id 更新为对应卡片 id
 - 一张卡片可通过 target_type + target_id 查询多张图片
-- 前端 MVP 只显示第一张图片即可
+- `sort_order` 用于卡片图集排序；查询卡片图片时按 `sort_order ASC, created_at ASC`
+- 删除 media_assets 记录不删除真实文件；如果删除的是当前卡片封面，业务层清空 `cover_media_asset_id` 并回退到第一张图
 
 ## 12. 索引
 

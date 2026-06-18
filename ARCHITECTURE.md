@@ -75,9 +75,9 @@ Plan References
 
 主要页面：InspirationLibraryPage（当前作为 Card Library 页面承载全部 / 灵感 / 技巧视图）。CardLibraryPage 文件名和 reference_cards 表属于后续演进。
 
-依赖的数据表：当前为 inspiration_cards、inspiration_card_tags、tags、media_assets，其中 `inspiration_cards.card_type` 区分灵感卡和技巧卡；后续可能演进为 reference_cards。
+依赖的数据表：当前为 inspiration_cards、inspiration_card_tags、tags、media_assets，其中 `inspiration_cards.card_type` 区分灵感卡和技巧卡，`inspiration_cards.cover_media_asset_id` 指定手动封面，`media_assets.sort_order` 支持图集排序；后续可能演进为 reference_cards。
 
-依赖的 Tauri commands：当前为 create_inspiration_card、update_inspiration_card、delete_inspiration_card、get_inspiration_card、list_inspiration_cards、attach_tag_to_inspiration、detach_tag_from_inspiration、import_local_image、delete_media_asset；后续增加技巧卡和统一卡片 commands。
+依赖的 Tauri commands：当前为 create_inspiration_card、update_inspiration_card、delete_inspiration_card、get_inspiration_card、list_inspiration_cards、attach_tag_to_inspiration、detach_tag_from_inspiration、update_inspiration_card_cover、import_local_image、delete_media_asset、reorder_media_assets；后续增加技巧卡和统一卡片 commands。
 
 统一卡片库原因：
 
@@ -110,10 +110,11 @@ Plan References
 - 一张卡片可以包含多张样图。
 - 列表页只显示一张封面图。
 - 卡片详情 / 编辑页支持多图翻动，体验类似小红书图集。
-- 默认第一张图片作为封面。
-- 后续可支持手动设置封面和调整图片顺序。
+- 可手动设置封面图。
+- 可通过左移 / 右移调整图片顺序。
+- 未手动设置封面时，默认使用排序后的第一张图片作为封面。
 
-当前 P0-08 已实现 `media_assets` 和本地图片导入能力；多图轮播、封面设置和图片排序属于后续计划。
+当前 P0-13 已支持卡片墙手动封面、详情图集浏览、图片排序和按排序顺序 hover 轮播。移除图片仅删除 media_assets 记录，不删除真实图片文件。
 
 ### Inspiration Library 灵感卡片库
 

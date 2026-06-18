@@ -11,12 +11,12 @@ pub use inspiration_commands::{
     attach_inspiration_to_project, attach_tag_to_inspiration, create_inspiration_card,
     delete_inspiration_card, detach_inspiration_from_project, detach_tag_from_inspiration,
     get_inspiration_card, list_inspiration_cards, list_project_inspirations,
-    update_inspiration_card,
+    update_inspiration_card, update_inspiration_card_cover,
 };
 pub use media_commands::{
     create_media_asset, delete_media_asset, get_media_asset, import_local_image,
     import_shooting_plan_image, list_media_assets, list_media_assets_by_target,
-    update_media_asset_target,
+    reorder_media_assets, update_media_asset_target,
 };
 pub use project_commands::{
     create_project, delete_project, get_project, list_projects, update_project,

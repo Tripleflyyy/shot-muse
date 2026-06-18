@@ -11,6 +11,7 @@ pub struct MediaAsset {
     pub file_size: Option<i64>,
     pub width: Option<i64>,
     pub height: Option<i64>,
+    pub sort_order: i64,
     pub source_type: String,
     pub created_at: String,
     pub updated_at: String,

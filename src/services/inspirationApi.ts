@@ -22,6 +22,7 @@ export type InspirationCard = {
   notes: string | null;
   project_id: string | null;
   project_name: string | null;
+  cover_media_asset_id: string | null;
   collected_at: string;
   created_at: string;
   updated_at: string;
@@ -148,6 +149,17 @@ export async function listProjectInspirations(
     projectId,
   });
   return cards.map(normalizeInspirationCard);
+}
+
+export async function updateInspirationCardCover(
+  cardId: string,
+  mediaAssetId: string | null,
+): Promise<InspirationCard> {
+  const card = await invoke<RawInspirationCard>("update_inspiration_card_cover", {
+    cardId,
+    mediaAssetId,
+  });
+  return normalizeInspirationCard(card);
 }
 
 function normalizeInspirationCard(card: RawInspirationCard): InspirationCard {

@@ -14,6 +14,7 @@ struct InspirationCardRow {
     notes: Option<String>,
     project_id: Option<String>,
     project_name: Option<String>,
+    cover_media_asset_id: Option<String>,
     collected_at: String,
     created_at: String,
     updated_at: String,
@@ -135,6 +136,7 @@ pub fn get_inspiration_card(
               inspiration_cards.notes,
               inspiration_cards.project_id,
               projects.name AS project_name,
+              inspiration_cards.cover_media_asset_id,
               inspiration_cards.collected_at,
               inspiration_cards.created_at,
               inspiration_cards.updated_at
@@ -167,6 +169,7 @@ pub fn list_inspiration_cards(
           inspiration_cards.notes,
           inspiration_cards.project_id,
           projects.name AS project_name,
+          inspiration_cards.cover_media_asset_id,
           inspiration_cards.collected_at,
           inspiration_cards.created_at,
           inspiration_cards.updated_at
@@ -323,6 +326,7 @@ pub fn list_project_inspirations(
           inspiration_cards.notes,
           inspiration_cards.project_id,
           projects.name AS project_name,
+          inspiration_cards.cover_media_asset_id,
           inspiration_cards.collected_at,
           inspiration_cards.created_at,
           inspiration_cards.updated_at
@@ -350,6 +354,29 @@ pub fn inspiration_exists(connection: &Connection, id: &str) -> rusqlite::Result
         [id],
         |row| row.get::<_, i64>(0).map(|value| value == 1),
     )
+}
+
+pub fn update_inspiration_card_cover(
+    connection: &Connection,
+    id: &str,
+    cover_media_asset_id: Option<String>,
+) -> rusqlite::Result<Option<InspirationCard>> {
+    let updated_count = connection.execute(
+        "
+        UPDATE inspiration_cards
+        SET
+          cover_media_asset_id = ?2,
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ?1
+        ",
+        params![id, normalize_optional_text(&cover_media_asset_id)],
+    )?;
+
+    if updated_count == 0 {
+        return Ok(None);
+    }
+
+    get_inspiration_card(connection, id)
 }
 
 pub fn project_exists(connection: &Connection, id: &str) -> rusqlite::Result<bool> {
@@ -406,6 +433,7 @@ fn hydrate_inspiration_card(
         notes: row.notes,
         project_id: row.project_id,
         project_name: row.project_name,
+        cover_media_asset_id: row.cover_media_asset_id,
         collected_at: row.collected_at,
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -462,9 +490,10 @@ fn map_inspiration_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InspirationC
         notes: row.get(6)?,
         project_id: row.get(7)?,
         project_name: row.get(8)?,
-        collected_at: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        cover_media_asset_id: row.get(9)?,
+        collected_at: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
     })
 }
 
@@ -499,8 +528,8 @@ fn normalized_ids(ids: &[String]) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::db::migrations;
-    use crate::models::{CreateTagPayload, ProjectPayload};
-    use crate::repositories::{project_repository, tag_repository};
+    use crate::models::{CreateTagPayload, MediaAssetPayload, ProjectPayload};
+    use crate::repositories::{media_repository, project_repository, tag_repository};
 
     fn test_connection() -> Connection {
         let connection = Connection::open_in_memory().expect("open in-memory database");
@@ -536,6 +565,25 @@ mod tests {
             "custom",
         )
         .expect("create tag")
+        .id
+    }
+
+    fn create_media(connection: &Connection, card_id: &str, file_path: &str) -> String {
+        media_repository::create_media_asset(
+            connection,
+            &MediaAssetPayload {
+                target_type: "inspiration".into(),
+                target_id: Some(card_id.into()),
+                file_path: file_path.into(),
+                original_filename: Some("test.jpg".into()),
+                mime_type: Some("image/jpeg".into()),
+                file_size: Some(1024),
+                width: None,
+                height: None,
+                source_type: "file_picker".into(),
+            },
+        )
+        .expect("create media")
         .id
     }
 
@@ -676,6 +724,55 @@ mod tests {
             })
             .expect("count relations after card delete");
         assert_eq!(relation_count, 0);
+    }
+
+    #[test]
+    fn update_inspiration_card_cover_is_returned_by_get_and_list() {
+        let connection = test_connection();
+        let card = create_inspiration_card(
+            &connection,
+            &InspirationCardPayload {
+                card_type: None,
+                title: "封面卡片".into(),
+                source_platform: "xiaohongshu".into(),
+                source_url: None,
+                author_name: None,
+                notes: None,
+                project_id: None,
+                collected_at: None,
+                tag_ids: Some(vec![]),
+            },
+        )
+        .expect("create card");
+        let media_id = create_media(&connection, &card.id, "/media/inspiration/cover.jpg");
+
+        let updated = update_inspiration_card_cover(&connection, &card.id, Some(media_id.clone()))
+            .expect("update cover")
+            .expect("card exists");
+        assert_eq!(updated.cover_media_asset_id.as_deref(), Some(media_id.as_str()));
+
+        let fetched = get_inspiration_card(&connection, &card.id)
+            .expect("get card")
+            .expect("card exists");
+        assert_eq!(fetched.cover_media_asset_id.as_deref(), Some(media_id.as_str()));
+
+        let listed = list_inspiration_cards(
+            &connection,
+            &InspirationCardFilters {
+                card_type: None,
+                project_id: None,
+                source_platform: None,
+                keyword: Some("封面卡片".into()),
+                tag_ids: None,
+            },
+        )
+        .expect("list cards");
+        assert_eq!(listed[0].cover_media_asset_id.as_deref(), Some(media_id.as_str()));
+
+        let cleared = update_inspiration_card_cover(&connection, &card.id, None)
+            .expect("clear cover")
+            .expect("card exists");
+        assert!(cleared.cover_media_asset_id.is_none());
     }
 
     #[test]

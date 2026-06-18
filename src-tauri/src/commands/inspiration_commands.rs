@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::models::{InspirationCard, InspirationCardFilters, InspirationCardPayload};
-use crate::repositories::inspiration_repository;
+use crate::repositories::{inspiration_repository, media_repository};
 use crate::state::AppState;
 
 const VALID_SOURCE_PLATFORMS: &[&str] = &[
@@ -213,6 +213,40 @@ pub fn list_project_inspirations(
         .with_connection(|connection| {
             ensure_project_exists(connection, &project_id)?;
             inspiration_repository::list_project_inspirations(connection, &project_id)
+        })
+        .map_err(command_error)
+}
+
+#[tauri::command]
+pub fn update_inspiration_card_cover(
+    state: State<'_, AppState>,
+    card_id: String,
+    media_asset_id: Option<String>,
+) -> Result<InspirationCard, String> {
+    validate_id(&card_id, "卡片 ID 不能为空")?;
+
+    state
+        .with_connection(|connection| {
+            ensure_inspiration_exists(connection, &card_id)?;
+
+            let normalized_media_asset_id = normalize_optional_string(media_asset_id);
+            if let Some(media_asset_id) = normalized_media_asset_id.as_deref() {
+                let media_asset = media_repository::get_media_asset(connection, media_asset_id)?
+                    .ok_or_else(|| validation_error("图片不存在"))?;
+
+                if media_asset.target_type != "inspiration"
+                    || media_asset.target_id.as_deref() != Some(card_id.trim())
+                {
+                    return Err(validation_error("该图片不属于当前卡片"));
+                }
+            }
+
+            inspiration_repository::update_inspiration_card_cover(
+                connection,
+                card_id.trim(),
+                normalized_media_asset_id,
+            )?
+            .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)
         })
         .map_err(command_error)
 }
