@@ -506,21 +506,9 @@ a {
   background: #fffaf3;
 }
 
-.project-directory-section.is-dragging,
-.project-plan-workspace-card.is-dragging {
-  opacity: 0.52;
-  transform: scale(0.985);
-}
-
-.project-directory-section.is-drag-over,
-.project-plan-workspace-card.is-drag-over {
-  border-color: #d5ad57;
-  box-shadow: 0 0 0 2px rgba(213, 173, 87, 0.18);
-}
-
 .project-directory-header {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
   min-width: 0;
@@ -678,57 +666,73 @@ a {
   min-height: 280px;
 }
 
-.sort-drag-handle {
-  display: inline-flex;
+.plan-side-order {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  display: flex;
   width: 28px;
-  height: 28px;
+  height: 76px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(120, 94, 58, 0.16);
+  border: 1px solid rgba(255, 248, 236, 0.34);
   border-radius: 999px;
-  color: #7a6550;
-  background: rgba(255, 252, 247, 0.84);
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: -4px;
+  color: #fff8ec;
+  background: rgba(37, 31, 25, 0.22);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 24px rgba(37, 31, 25, 0.14);
+  font-size: 25px;
+  font-weight: 800;
   line-height: 1;
-  cursor: grab;
-  user-select: none;
-}
-
-.sort-drag-handle:hover,
-.sort-drag-handle:focus-visible {
-  border-color: #d9a94c;
-  background: #fff4d7;
-  outline: none;
-}
-
-.sort-drag-handle:active {
-  cursor: grabbing;
-}
-
-.plan-card-sort-tools {
-  position: absolute;
-  z-index: 4;
-  top: 10px;
-  right: 10px;
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(255, 252, 247, 0.72);
   opacity: 0;
+  padding: 0;
+  pointer-events: none;
   transition:
     opacity 0.16s ease,
+    transform 0.16s ease,
     background 0.16s ease;
 }
 
-.project-plan-workspace-card:hover .plan-card-sort-tools,
-.project-plan-workspace-card:focus-within .plan-card-sort-tools,
-.project-plan-workspace-card.is-dragging .plan-card-sort-tools,
-.project-plan-workspace-card.is-drag-over .plan-card-sort-tools {
+.plan-side-order-left {
+  left: 8px;
+  transform: translate(-2px, -50%);
+}
+
+.plan-side-order-right {
+  right: 8px;
+  transform: translate(2px, -50%);
+}
+
+.shooting-plan-card--compact:hover .plan-side-order,
+.shooting-plan-card--compact:focus-within .plan-side-order {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.shooting-plan-card--compact:hover .plan-side-order-left,
+.shooting-plan-card--compact:focus-within .plan-side-order-left {
+  transform: translate(0, -50%);
+}
+
+.shooting-plan-card--compact:hover .plan-side-order-right,
+.shooting-plan-card--compact:focus-within .plan-side-order-right {
+  transform: translate(0, -50%);
+}
+
+.plan-side-order:hover {
+  border-color: rgba(255, 248, 236, 0.62);
+  background: rgba(37, 31, 25, 0.42);
+}
+
+.shooting-plan-card:not(.shooting-plan-card--with-cover) .plan-side-order {
+  border-color: rgba(120, 94, 58, 0.22);
+  color: #6d5429;
+  background: rgba(255, 252, 247, 0.78);
+}
+
+.shooting-plan-card:not(.shooting-plan-card--with-cover) .plan-side-order:hover {
+  border-color: #d9a94c;
+  background: #fff4d7;
 }
 
 .sort-fallback-button {
@@ -777,8 +781,7 @@ a {
     transform 0.16s ease;
 }
 
-.project-plan-add-card:hover,
-.project-plan-add-card.is-drag-over {
+.project-plan-add-card:hover {
   transform: translateY(-2px);
   border-color: #d9a94c;
   background: #fff7e6;
@@ -1394,6 +1397,37 @@ button:disabled {
   border-color: #b9b1a6;
   color: #625a51;
   background: #ece7df;
+}
+
+.plan-status-select-badge {
+  flex: 0 0 auto;
+  min-width: 86px;
+  max-width: 132px;
+  border: 1px solid #d8cfc1;
+  border-radius: 999px;
+  padding: 5px 24px 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #5e554b;
+  cursor: pointer;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 12px) 50%,
+    calc(100% - 7px) 50%;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  box-shadow: 0 6px 16px rgba(55, 42, 29, 0.08);
+}
+
+.plan-status-select-badge:focus-visible {
+  outline: 2px solid rgba(213, 173, 87, 0.55);
+  outline-offset: 2px;
 }
 
 .status-select {

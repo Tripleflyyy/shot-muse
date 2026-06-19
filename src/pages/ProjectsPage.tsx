@@ -1,4 +1,4 @@
-import { DragEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
@@ -139,10 +139,6 @@ export default function ProjectsPage() {
   const [brokenPlanCoverIds, setBrokenPlanCoverIds] = useState<Set<string>>(new Set());
   const [keyword, setKeyword] = useState("");
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
-  const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null);
-  const [dragOverProjectId, setDragOverProjectId] = useState<string | null>(null);
-  const [draggingPlan, setDraggingPlan] = useState<{ projectId: string; planId: string } | null>(null);
-  const [dragOverPlanId, setDragOverPlanId] = useState<string | null>(null);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm);
   const [planForm, setPlanForm] = useState<PlanFormState>(emptyPlanForm);
   const [activeReferencePlanId, setActiveReferencePlanId] = useState<string | null>(null);
@@ -753,33 +749,6 @@ export default function ProjectsPage() {
     }
   }
 
-  async function dropProject(targetProjectId: string) {
-    if (draggingPlan) {
-      return;
-    }
-    if (!draggingProjectId || draggingProjectId === targetProjectId) {
-      setDraggingProjectId(null);
-      setDragOverProjectId(null);
-      return;
-    }
-
-    const ids = projects.map((project) => project.id);
-    const fromIndex = ids.indexOf(draggingProjectId);
-    const toIndex = ids.indexOf(targetProjectId);
-    if (fromIndex < 0 || toIndex < 0) {
-      setDraggingProjectId(null);
-      setDragOverProjectId(null);
-      return;
-    }
-
-    const nextOrder = [...ids];
-    const [moved] = nextOrder.splice(fromIndex, 1);
-    nextOrder.splice(toIndex, 0, moved);
-    setDraggingProjectId(null);
-    setDragOverProjectId(null);
-    await persistProjectOrder(nextOrder);
-  }
-
   async function moveProject(projectId: string, direction: -1 | 1) {
     const ids = projects.map((project) => project.id);
     const currentIndex = ids.indexOf(projectId);
@@ -813,36 +782,6 @@ export default function ProjectsPage() {
     }
   }
 
-  async function dropPlan(targetProjectId: string, targetPlanId: string | null) {
-    if (!draggingPlan || draggingPlan.projectId !== targetProjectId) {
-      setDraggingPlan(null);
-      setDragOverPlanId(null);
-      return;
-    }
-
-    const projectPlans = (plansByProject[targetProjectId] ?? []).map((plan) => plan.id);
-    const fromIndex = projectPlans.indexOf(draggingPlan.planId);
-    const toIndex = targetPlanId ? projectPlans.indexOf(targetPlanId) : projectPlans.length - 1;
-    if (
-      fromIndex < 0 ||
-      toIndex < 0 ||
-      (targetPlanId && draggingPlan.planId === targetPlanId) ||
-      (!targetPlanId && fromIndex === projectPlans.length - 1)
-    ) {
-      setDraggingPlan(null);
-      setDragOverPlanId(null);
-      return;
-    }
-
-    const nextOrder = [...projectPlans];
-    const [moved] = nextOrder.splice(fromIndex, 1);
-    const adjustedIndex = targetPlanId && fromIndex < toIndex ? toIndex - 1 : toIndex;
-    nextOrder.splice(adjustedIndex, 0, moved);
-    setDraggingPlan(null);
-    setDragOverPlanId(null);
-    await persistPlanOrder(targetProjectId, nextOrder);
-  }
-
   async function movePlan(projectId: string, planId: string, direction: -1 | 1) {
     const projectPlanIds = (plansByProject[projectId] ?? []).map((plan) => plan.id);
     const currentIndex = projectPlanIds.indexOf(planId);
@@ -855,6 +794,40 @@ export default function ProjectsPage() {
     const [moved] = nextOrder.splice(currentIndex, 1);
     nextOrder.splice(targetIndex, 0, moved);
     await persistPlanOrder(projectId, nextOrder);
+  }
+
+  async function updatePlanStatus(plan: ShootingPlan, status: ShootingPlanStatus) {
+    if (plan.status === status) {
+      return;
+    }
+
+    setPlans((current) =>
+      current.map((item) => (item.id === plan.id ? { ...item, status } : item)),
+    );
+    setSelectedPlan((current) => (current?.id === plan.id ? { ...current, status } : current));
+
+    try {
+      await updateShootingPlan(plan.id, {
+        project_id: plan.project_id,
+        title: plan.title,
+        shooting_theme: plan.shooting_theme,
+        gear_list: plan.gear_list,
+        scene_list: plan.scene_list,
+        action_list: plan.action_list,
+        composition_reference: plan.composition_reference,
+        lighting_reference: plan.lighting_reference,
+        post_style: plan.post_style,
+        technique_notes: plan.technique_notes,
+        notes: plan.notes,
+        sort_order: plan.sort_order,
+        status,
+      });
+      await loadWorkspace();
+    } catch (error) {
+      console.error("更新 Plan 状态失败", error);
+      alert(toErrorMessage(error, "更新 Plan 状态失败"));
+      await loadWorkspace();
+    }
   }
 
   function requestDeleteProject(project: Project) {
@@ -1013,40 +986,10 @@ export default function ProjectsPage() {
 
               return (
                 <section
-                  className={`project-directory-section ${
-                    draggingProjectId === project.id ? "is-dragging" : ""
-                  } ${
-                    dragOverProjectId === project.id && draggingProjectId !== project.id ? "is-drag-over" : ""
-                  }`}
+                  className="project-directory-section"
                   key={project.id}
-                  onDragOver={(event) => {
-                    if (draggingProjectId) {
-                      event.preventDefault();
-                      setDragOverProjectId(project.id);
-                    }
-                  }}
-                  onDrop={() => void dropProject(project.id)}
                 >
                   <header className="project-directory-header">
-                    <span
-                      aria-label="拖动排序 Project"
-                      className="sort-drag-handle project-sort-handle"
-                      draggable
-                      role="button"
-                      title="拖动排序 Project"
-                      onClick={(event) => event.stopPropagation()}
-                      onDragStart={(event) => {
-                        event.stopPropagation();
-                        setDraggingProjectId(project.id);
-                        event.dataTransfer.effectAllowed = "move";
-                      }}
-                      onDragEnd={() => {
-                        setDraggingProjectId(null);
-                        setDragOverProjectId(null);
-                      }}
-                    >
-                      ⋮⋮
-                    </span>
                     <button
                       className="project-toggle-button"
                       type="button"
@@ -1155,8 +1098,6 @@ export default function ProjectsPage() {
                               coverAsset={coverAsset}
                               hasCover={Boolean(hasCover)}
                               inspirationCoverMap={inspirationCoverMap}
-                              isDragging={draggingPlan?.planId === plan.id}
-                              isDragOver={dragOverPlanId === plan.id}
                               preview={preview}
                               isReferenceActive={isReferenceModalOpen && activeReferencePlanId === plan.id}
                               canMoveUp={planIndex > 0}
@@ -1166,36 +1107,14 @@ export default function ProjectsPage() {
                               onOpen={() => setSelectedPlan(plan)}
                               onMoveUp={() => void movePlan(project.id, plan.id, -1)}
                               onMoveDown={() => void movePlan(project.id, plan.id, 1)}
-                              onDragStart={() => setDraggingPlan({ projectId: project.id, planId: plan.id })}
-                              onDragOver={() => setDragOverPlanId(plan.id)}
-                              onDrop={() => void dropPlan(project.id, plan.id)}
-                              onDragEnd={() => {
-                                setDraggingPlan(null);
-                                setDragOverPlanId(null);
-                              }}
+                              onStatusChange={(status) => void updatePlanStatus(plan, status)}
                             />
                           );
                         })}
                         <button
-                          className={`project-plan-add-card ${
-                            draggingPlan?.projectId === project.id && dragOverPlanId === `${project.id}:end`
-                              ? "is-drag-over"
-                              : ""
-                          }`}
+                          className="project-plan-add-card"
                           type="button"
                           onClick={() => openNewPlanModal(project)}
-                          onDragOver={(event) => {
-                            if (draggingPlan?.projectId === project.id) {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setDragOverPlanId(`${project.id}:end`);
-                            }
-                          }}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void dropPlan(project.id, null);
-                          }}
                         >
                           <span>＋</span>
                           <strong>New Plan</strong>
@@ -1315,17 +1234,12 @@ function PlanCard({
   isReferenceActive,
   canMoveUp,
   canMoveDown,
-  isDragging,
-  isDragOver,
   onBrokenReferenceCover,
   onCoverBroken,
   onOpen,
   onMoveUp,
   onMoveDown,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
+  onStatusChange,
 }: {
   plan: ShootingPlan;
   preview: PlanReferencePreview;
@@ -1336,42 +1250,19 @@ function PlanCard({
   isReferenceActive: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
-  isDragging: boolean;
-  isDragOver: boolean;
   onBrokenReferenceCover: (cardId: string) => void;
   onCoverBroken: () => void;
   onOpen: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
-  onDragStart: () => void;
-  onDragOver: (event: DragEvent<HTMLElement>) => void;
-  onDrop: () => void;
-  onDragEnd: () => void;
+  onStatusChange: (status: ShootingPlanStatus) => void;
 }) {
   return (
     <article
       className={`entity-card shooting-plan-card shooting-plan-card--compact project-plan-workspace-card ${
         hasCover ? "shooting-plan-card--with-cover" : ""
-      } ${isReferenceActive ? "shooting-plan-card--active-reference" : ""} ${
-        isDragOver ? "is-drag-over" : ""
-      } ${
-        isDragging ? "is-dragging" : ""
-      }`}
+      } ${isReferenceActive ? "shooting-plan-card--active-reference" : ""}`}
       onClick={onOpen}
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onDragOver(event);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onDrop();
-      }}
-      onDragEnd={(event) => {
-        event.stopPropagation();
-        onDragEnd();
-      }}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {
@@ -1381,44 +1272,32 @@ function PlanCard({
         }
       }}
     >
-      <div className="plan-card-sort-tools" onClick={(event) => event.stopPropagation()}>
-        <span
-          aria-label="拖动排序 Plan"
-          className="sort-drag-handle plan-sort-handle"
-          draggable
-          role="button"
-          title="拖动排序 Plan"
-          onDragStart={(event) => {
+      {canMoveUp && (
+        <button
+          aria-label="Plan 前移"
+          className="plan-side-order plan-side-order-left"
+          type="button"
+          onClick={(event) => {
             event.stopPropagation();
-            event.dataTransfer.effectAllowed = "move";
-            onDragStart();
-          }}
-          onDragEnd={(event) => {
-            event.stopPropagation();
-            onDragEnd();
+            onMoveUp();
           }}
         >
-          ⋮⋮
-        </span>
-        <button
-          aria-label="Plan 上移"
-          className="sort-fallback-button sort-fallback-button--mini"
-          disabled={!canMoveUp}
-          type="button"
-          onClick={onMoveUp}
-        >
-          ↑
+          ‹
         </button>
+      )}
+      {canMoveDown && (
         <button
-          aria-label="Plan 下移"
-          className="sort-fallback-button sort-fallback-button--mini"
-          disabled={!canMoveDown}
+          aria-label="Plan 后移"
+          className="plan-side-order plan-side-order-right"
           type="button"
-          onClick={onMoveDown}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMoveDown();
+          }}
         >
-          ↓
+          ›
         </button>
-      </div>
+      )}
       {hasCover && coverAsset && (
         <img
           alt=""
@@ -1433,9 +1312,7 @@ function PlanCard({
             <h2>{plan.title}</h2>
             <p className="plan-project-name">Project · {plan.project_name ?? "未知项目"}</p>
           </div>
-          <span className={`status-pill status-pill--${plan.status}`}>
-            {statusLabel(plan.status)}
-          </span>
+          <PlanStatusSelectBadge status={plan.status} onChange={onStatusChange} />
         </div>
         {isReferenceActive && <p className="active-reference-label">正在管理参考卡片</p>}
 
@@ -1453,6 +1330,33 @@ function PlanCard({
         />
       </div>
     </article>
+  );
+}
+
+function PlanStatusSelectBadge({
+  status,
+  onChange,
+}: {
+  status: ShootingPlanStatus;
+  onChange: (status: ShootingPlanStatus) => void;
+}) {
+  return (
+    <select
+      aria-label="设置 Plan 状态"
+      className={`plan-status-select-badge status-pill--${status}`}
+      value={status}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => {
+        event.stopPropagation();
+        onChange(event.target.value as ShootingPlanStatus);
+      }}
+    >
+      {statuses.map((item) => (
+        <option key={item.value} value={item.value}>
+          {item.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
