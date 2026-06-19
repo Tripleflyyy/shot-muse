@@ -531,7 +531,7 @@ export default function ShootingPlanPage() {
     );
 
     try {
-      await updateShootingPlan(plan.id, {
+      const updatedPlan = await updateShootingPlan(plan.id, {
         project_id: plan.project_id,
         title: plan.title,
         shooting_theme: plan.shooting_theme,
@@ -546,7 +546,12 @@ export default function ShootingPlanPage() {
         sort_order: plan.sort_order,
         status,
       });
-      await loadPlans(filters);
+      setPlans((current) =>
+        current.map((item) => (item.id === updatedPlan.id ? updatedPlan : item)),
+      );
+      setSelectedPlanForDetail((current) =>
+        current?.id === updatedPlan.id ? updatedPlan : current,
+      );
     } catch (error) {
       console.error("更新 Plan 状态失败", error);
       alert(toErrorMessage(error, "更新 Plan 状态失败"));

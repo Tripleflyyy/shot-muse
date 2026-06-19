@@ -16,7 +16,6 @@ import {
   listProjects,
   Project,
   ProjectPayload,
-  reorderProjects,
   updateProject,
 } from "../services/projectApi";
 import {
@@ -732,37 +731,6 @@ export default function ProjectsPage() {
     });
   }
 
-  async function persistProjectOrder(nextOrder: string[]) {
-    setProjects((current) =>
-      nextOrder
-        .map((id) => current.find((project) => project.id === id))
-        .filter((project): project is Project => Boolean(project)),
-    );
-
-    try {
-      await reorderProjects(nextOrder);
-      await loadWorkspace();
-    } catch (error) {
-      console.error("调整 Project 顺序失败", error);
-      alert(toErrorMessage(error, "调整 Project 顺序失败"));
-      await loadWorkspace();
-    }
-  }
-
-  async function moveProject(projectId: string, direction: -1 | 1) {
-    const ids = projects.map((project) => project.id);
-    const currentIndex = ids.indexOf(projectId);
-    const targetIndex = currentIndex + direction;
-    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= ids.length) {
-      return;
-    }
-
-    const nextOrder = [...ids];
-    const [moved] = nextOrder.splice(currentIndex, 1);
-    nextOrder.splice(targetIndex, 0, moved);
-    await persistProjectOrder(nextOrder);
-  }
-
   async function persistPlanOrder(targetProjectId: string, nextOrder: string[]) {
     setPlans((current) => {
       const movedPlans = nextOrder
@@ -811,7 +779,7 @@ export default function ProjectsPage() {
     setSelectedPlan((current) => (current?.id === plan.id ? { ...current, status } : current));
 
     try {
-      await updateShootingPlan(plan.id, {
+      const updatedPlan = await updateShootingPlan(plan.id, {
         project_id: plan.project_id,
         title: plan.title,
         shooting_theme: plan.shooting_theme,
@@ -826,7 +794,10 @@ export default function ProjectsPage() {
         sort_order: plan.sort_order,
         status,
       });
-      await loadWorkspace();
+      setPlans((current) =>
+        current.map((item) => (item.id === updatedPlan.id ? updatedPlan : item)),
+      );
+      setSelectedPlan((current) => (current?.id === updatedPlan.id ? updatedPlan : current));
     } catch (error) {
       console.error("更新 Plan 状态失败", error);
       alert(toErrorMessage(error, "更新 Plan 状态失败"));
@@ -984,7 +955,7 @@ export default function ProjectsPage() {
           <p className="empty-message">暂无 Project。先创建一个拍摄目录吧。</p>
         ) : (
           <div className="project-directory-list">
-            {projects.map((project, projectIndex) => {
+            {projects.map((project) => {
               const projectPlans = plansByProject[project.id] ?? [];
               const isExpanded = expandedProjectIds.has(project.id);
 
@@ -1019,30 +990,6 @@ export default function ProjectsPage() {
                     </div>
                     <span className="project-plan-count">{projectPlans.length} Plans</span>
                     <div className="project-directory-actions">
-                      <button
-                        className="icon-button sort-fallback-button"
-                        type="button"
-                        title="Project 上移"
-                        disabled={projectIndex === 0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void moveProject(project.id, -1);
-                        }}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        className="icon-button sort-fallback-button"
-                        type="button"
-                        title="Project 下移"
-                        disabled={projectIndex === projects.length - 1}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void moveProject(project.id, 1);
-                        }}
-                      >
-                        ↓
-                      </button>
                       <button
                         className="icon-button"
                         type="button"

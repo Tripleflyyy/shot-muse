@@ -601,8 +601,7 @@ a {
   background: #fff4d7;
 }
 
-.icon-button:disabled,
-.sort-fallback-button:disabled {
+.icon-button:disabled {
   cursor: not-allowed;
   opacity: 0.38;
 }
@@ -732,34 +731,6 @@ a {
 .shooting-plan-card:not(.shooting-plan-card--with-cover) .plan-side-order:hover {
   color: #4f3712;
   background: transparent;
-}
-
-.sort-fallback-button {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(120, 94, 58, 0.16);
-  border-radius: 999px;
-  color: #4a3f34;
-  background: rgba(255, 252, 247, 0.9);
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1;
-  padding: 0;
-  cursor: pointer;
-}
-
-.sort-fallback-button:hover:not(:disabled) {
-  border-color: #d9a94c;
-  background: #fff4d7;
-}
-
-.sort-fallback-button--mini {
-  width: 24px;
-  height: 24px;
-  font-size: 12px;
 }
 
 .project-plan-add-card {
