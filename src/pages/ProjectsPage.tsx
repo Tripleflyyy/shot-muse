@@ -140,7 +140,9 @@ export default function ProjectsPage() {
   const [keyword, setKeyword] = useState("");
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
   const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null);
+  const [dragOverProjectId, setDragOverProjectId] = useState<string | null>(null);
   const [draggingPlan, setDraggingPlan] = useState<{ projectId: string; planId: string } | null>(null);
+  const [dragOverPlanId, setDragOverPlanId] = useState<string | null>(null);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm);
   const [planForm, setPlanForm] = useState<PlanFormState>(emptyPlanForm);
   const [activeReferencePlanId, setActiveReferencePlanId] = useState<string | null>(null);
@@ -738,8 +740,12 @@ export default function ProjectsPage() {
   }
 
   async function dropProject(targetProjectId: string) {
+    if (draggingPlan) {
+      return;
+    }
     if (!draggingProjectId || draggingProjectId === targetProjectId) {
       setDraggingProjectId(null);
+      setDragOverProjectId(null);
       return;
     }
 
@@ -748,6 +754,7 @@ export default function ProjectsPage() {
     const toIndex = ids.indexOf(targetProjectId);
     if (fromIndex < 0 || toIndex < 0) {
       setDraggingProjectId(null);
+      setDragOverProjectId(null);
       return;
     }
 
@@ -760,6 +767,7 @@ export default function ProjectsPage() {
         .filter((project): project is Project => Boolean(project)),
     );
     setDraggingProjectId(null);
+    setDragOverProjectId(null);
 
     try {
       await reorderProjects(nextOrder);
@@ -770,29 +778,46 @@ export default function ProjectsPage() {
     }
   }
 
-  async function dropPlan(targetProjectId: string, targetPlanId: string) {
-    if (!draggingPlan || draggingPlan.projectId !== targetProjectId || draggingPlan.planId === targetPlanId) {
+  async function dropPlan(targetProjectId: string, targetPlanId: string | null) {
+    if (!draggingPlan || draggingPlan.projectId !== targetProjectId) {
       setDraggingPlan(null);
+      setDragOverPlanId(null);
       return;
     }
 
     const projectPlans = (plansByProject[targetProjectId] ?? []).map((plan) => plan.id);
     const fromIndex = projectPlans.indexOf(draggingPlan.planId);
-    const toIndex = projectPlans.indexOf(targetPlanId);
-    if (fromIndex < 0 || toIndex < 0) {
+    const toIndex = targetPlanId ? projectPlans.indexOf(targetPlanId) : projectPlans.length - 1;
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      (targetPlanId && draggingPlan.planId === targetPlanId) ||
+      (!targetPlanId && fromIndex === projectPlans.length - 1)
+    ) {
       setDraggingPlan(null);
+      setDragOverPlanId(null);
       return;
     }
 
     const nextOrder = [...projectPlans];
     const [moved] = nextOrder.splice(fromIndex, 1);
-    nextOrder.splice(toIndex, 0, moved);
+    const adjustedIndex = targetPlanId && fromIndex < toIndex ? toIndex - 1 : toIndex;
+    nextOrder.splice(adjustedIndex, 0, moved);
+    setPlans((current) => {
+      const movedPlans = nextOrder
+        .map((id) => current.find((plan) => plan.id === id))
+        .filter((plan): plan is ShootingPlan => Boolean(plan));
+      const otherPlans = current.filter((plan) => plan.project_id !== targetProjectId);
+      return [...otherPlans, ...movedPlans];
+    });
     setDraggingPlan(null);
+    setDragOverPlanId(null);
 
     try {
       await reorderShootingPlans(targetProjectId, nextOrder);
       await loadWorkspace();
     } catch (error) {
+      console.error("调整 Plan 顺序失败", error);
       alert(toErrorMessage(error, "调整 Plan 顺序失败"));
       await loadWorkspace();
     }
@@ -956,25 +981,46 @@ export default function ProjectsPage() {
                 <section
                   className={`project-directory-section ${
                     draggingProjectId === project.id ? "is-dragging" : ""
+                  } ${
+                    dragOverProjectId === project.id && draggingProjectId !== project.id ? "is-drag-over" : ""
                   }`}
                   key={project.id}
-                  draggable
-                  onDragStart={(event) => {
-                    setDraggingProjectId(project.id);
-                    event.dataTransfer.effectAllowed = "move";
+                  onDragOver={(event) => {
+                    if (draggingProjectId) {
+                      event.preventDefault();
+                      setDragOverProjectId(project.id);
+                    }
                   }}
-                  onDragOver={(event) => event.preventDefault()}
                   onDrop={() => void dropProject(project.id)}
-                  onDragEnd={() => setDraggingProjectId(null)}
                 >
-                  <header className="project-directory-header">
+                  <header
+                    className="project-directory-header"
+                    draggable
+                    onDragStart={(event) => {
+                      if ((event.target as HTMLElement).closest("button, input, select, textarea, a")) {
+                        event.preventDefault();
+                        return;
+                      }
+                      setDraggingProjectId(project.id);
+                      event.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => {
+                      setDraggingProjectId(null);
+                      setDragOverProjectId(null);
+                    }}
+                  >
                     <button
                       className="project-toggle-button"
                       type="button"
-                      onClick={() => toggleProject(project.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleProject(project.id);
+                      }}
                       aria-expanded={isExpanded}
+                      title={isExpanded ? "收起 Project" : "展开 Project"}
                     >
-                      {isExpanded ? "收起" : "展开"}
+                      <span aria-hidden="true">{isExpanded ? "⌄" : "›"}</span>
+                      <span className="sr-only">{isExpanded ? "收起" : "展开"}</span>
                     </button>
                     <div className="project-directory-title">
                       <h2>{project.name}</h2>
@@ -1030,10 +1076,6 @@ export default function ProjectsPage() {
 
                   {isExpanded && (
                     <div className="project-directory-body">
-                      <p className="muted-text">
-                        Plan 是 Project 下的具体拍摄主题、场景、地点或子任务。
-                      </p>
-
                       <div className="project-plan-card-grid">
                         {projectPlans.map((plan) => {
                           const preview = planReferencePreviewMap[plan.id] ?? {
@@ -1052,22 +1094,42 @@ export default function ProjectsPage() {
                               hasCover={Boolean(hasCover)}
                               inspirationCoverMap={inspirationCoverMap}
                               isDragging={draggingPlan?.planId === plan.id}
+                              isDragOver={dragOverPlanId === plan.id}
                               preview={preview}
                               isReferenceActive={isReferenceModalOpen && activeReferencePlanId === plan.id}
                               onBrokenReferenceCover={markCoverBroken}
                               onCoverBroken={() => markPlanCoverBroken(plan.id)}
                               onOpen={() => setSelectedPlan(plan)}
                               onDragStart={() => setDraggingPlan({ projectId: project.id, planId: plan.id })}
-                              onDragOver={(event) => event.preventDefault()}
+                              onDragOver={() => setDragOverPlanId(plan.id)}
                               onDrop={() => void dropPlan(project.id, plan.id)}
-                              onDragEnd={() => setDraggingPlan(null)}
+                              onDragEnd={() => {
+                                setDraggingPlan(null);
+                                setDragOverPlanId(null);
+                              }}
                             />
                           );
                         })}
                         <button
-                          className="project-plan-add-card"
+                          className={`project-plan-add-card ${
+                            draggingPlan?.projectId === project.id && dragOverPlanId === `${project.id}:end`
+                              ? "is-drag-over"
+                              : ""
+                          }`}
                           type="button"
                           onClick={() => openNewPlanModal(project)}
+                          onDragOver={(event) => {
+                            if (draggingPlan?.projectId === project.id) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setDragOverPlanId(`${project.id}:end`);
+                            }
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void dropPlan(project.id, null);
+                          }}
                         >
                           <span>＋</span>
                           <strong>New Plan</strong>
@@ -1090,20 +1152,6 @@ export default function ProjectsPage() {
           onClose={closeProjectModal}
           onSubmit={handleProjectSubmit}
           onChange={setProjectForm}
-        />
-      )}
-
-      {isPlanModalOpen && (
-        <PlanFormModal
-          form={planForm}
-          isSaving={isSavingPlan}
-          isEditing={editingPlanId !== null}
-          projectName={projects.find((project) => project.id === planForm.project_id)?.name ?? ""}
-          projects={projects}
-          imagePicker={renderPlanImagePicker()}
-          onClose={closePlanModal}
-          onSubmit={handlePlanSubmit}
-          onChange={setPlanForm}
         />
       )}
 
@@ -1132,6 +1180,20 @@ export default function ProjectsPage() {
           onDelete={() => setPendingDeletePlan(selectedPlan)}
           onCancelDelete={() => setPendingDeletePlan(null)}
           onConfirmDelete={() => void confirmDeletePlan()}
+        />
+      )}
+
+      {isPlanModalOpen && (
+        <PlanFormModal
+          form={planForm}
+          isSaving={isSavingPlan}
+          isEditing={editingPlanId !== null}
+          projectName={projects.find((project) => project.id === planForm.project_id)?.name ?? ""}
+          projects={projects}
+          imagePicker={renderPlanImagePicker()}
+          onClose={closePlanModal}
+          onSubmit={handlePlanSubmit}
+          onChange={setPlanForm}
         />
       )}
 
@@ -1186,6 +1248,7 @@ function PlanCard({
   brokenCoverIds,
   isReferenceActive,
   isDragging,
+  isDragOver,
   onBrokenReferenceCover,
   onCoverBroken,
   onOpen,
@@ -1202,6 +1265,7 @@ function PlanCard({
   brokenCoverIds: Set<string>;
   isReferenceActive: boolean;
   isDragging: boolean;
+  isDragOver: boolean;
   onBrokenReferenceCover: (cardId: string) => void;
   onCoverBroken: () => void;
   onOpen: () => void;
@@ -1215,14 +1279,31 @@ function PlanCard({
       className={`entity-card shooting-plan-card shooting-plan-card--compact project-plan-workspace-card ${
         hasCover ? "shooting-plan-card--with-cover" : ""
       } ${isReferenceActive ? "shooting-plan-card--active-reference" : ""} ${
+        isDragOver ? "is-drag-over" : ""
+      } ${
         isDragging ? "is-dragging" : ""
       }`}
       draggable
       onClick={onOpen}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
+      onDragStart={(event) => {
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDragOver(event);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDrop();
+      }}
+      onDragEnd={(event) => {
+        event.stopPropagation();
+        onDragEnd();
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {

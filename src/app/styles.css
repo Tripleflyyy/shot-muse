@@ -38,6 +38,15 @@ a {
   text-decoration: none;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 248px 1fr;
@@ -503,6 +512,12 @@ a {
   transform: scale(0.985);
 }
 
+.project-directory-section.is-drag-over,
+.project-plan-workspace-card.is-drag-over {
+  border-color: #d5ad57;
+  box-shadow: 0 0 0 2px rgba(213, 173, 87, 0.18);
+}
+
 .project-directory-header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -511,16 +526,32 @@ a {
   min-width: 0;
   padding: 14px;
   background: linear-gradient(180deg, #fffdf9, #fff7ed);
+  cursor: grab;
+}
+
+.project-directory-header:active {
+  cursor: grabbing;
 }
 
 .project-toggle-button {
-  border: 1px solid #d8cfc0;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(120, 94, 58, 0.16);
   border-radius: 999px;
-  padding: 7px 11px;
   color: #3b342e;
-  background: #ffffff;
+  background: rgba(255, 252, 247, 0.9);
+  font-size: 22px;
   font-weight: 800;
+  line-height: 1;
   cursor: pointer;
+}
+
+.project-toggle-button:hover {
+  border-color: #d9a94c;
+  background: #fff4d7;
 }
 
 .project-directory-title {
@@ -629,8 +660,8 @@ a {
 
 .project-plan-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
   min-width: 0;
   max-width: 100%;
 }
@@ -640,7 +671,12 @@ a {
 }
 
 .project-plan-workspace-card[draggable="true"] {
+  cursor: grab;
   user-select: none;
+}
+
+.project-plan-workspace-card[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .project-plan-add-card {
@@ -661,7 +697,8 @@ a {
     transform 0.16s ease;
 }
 
-.project-plan-add-card:hover {
+.project-plan-add-card:hover,
+.project-plan-add-card.is-drag-over {
   transform: translateY(-2px);
   border-color: #d9a94c;
   background: #fff7e6;
