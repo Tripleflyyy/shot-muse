@@ -488,8 +488,11 @@ export default function ShootingPlanPage() {
     );
 
     try {
-      await reorderShootingPlans(projectId, nextOrder);
-      await loadPlans(filters);
+      const reorderedPlans = await reorderShootingPlans(projectId, nextOrder);
+      setPlans(reorderedPlans);
+      setSelectedPlanForDetail((current) =>
+        current ? reorderedPlans.find((plan) => plan.id === current.id) ?? current : current,
+      );
     } catch (error) {
       console.error("调整 Plan 顺序失败", error);
       alert(toErrorMessage(error, "调整 Plan 顺序失败"));

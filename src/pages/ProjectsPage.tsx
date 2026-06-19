@@ -773,8 +773,12 @@ export default function ProjectsPage() {
     });
 
     try {
-      await reorderShootingPlans(targetProjectId, nextOrder);
-      await loadWorkspace();
+      const reorderedPlans = await reorderShootingPlans(targetProjectId, nextOrder);
+      const reorderedById = new Map(reorderedPlans.map((plan) => [plan.id, plan]));
+      setPlans((current) => current.map((plan) => reorderedById.get(plan.id) ?? plan));
+      setSelectedPlan((current) =>
+        current ? reorderedById.get(current.id) ?? current : current,
+      );
     } catch (error) {
       console.error("调整 Plan 顺序失败", error);
       alert(toErrorMessage(error, "调整 Plan 顺序失败"));
@@ -1310,7 +1314,6 @@ function PlanCard({
         <div className="entity-card-header">
           <div>
             <h2>{plan.title}</h2>
-            <p className="plan-project-name">Project · {plan.project_name ?? "未知项目"}</p>
           </div>
           <PlanStatusSelectBadge status={plan.status} onChange={onStatusChange} />
         </div>
@@ -1485,13 +1488,7 @@ function PlanFormModal({
             <input value={form.title} onChange={(event) => onChange({ ...form, title: event.target.value })} />
           </label>
           <TextAreaField label="风格主题" value={form.shooting_theme} onChange={(value) => onChange({ ...form, shooting_theme: value })} />
-          <TextAreaField label="器材清单" value={form.gear_list} onChange={(value) => onChange({ ...form, gear_list: value })} />
-          <TextAreaField label="场景清单" value={form.scene_list} onChange={(value) => onChange({ ...form, scene_list: value })} />
-          <TextAreaField label="动作 / 姿态清单" value={form.action_list} onChange={(value) => onChange({ ...form, action_list: value })} />
-          <TextAreaField label="构图参考" value={form.composition_reference} onChange={(value) => onChange({ ...form, composition_reference: value })} />
-          <TextAreaField label="光线参考" value={form.lighting_reference} onChange={(value) => onChange({ ...form, lighting_reference: value })} />
-          <TextAreaField label="后期风格" value={form.post_style} onChange={(value) => onChange({ ...form, post_style: value })} />
-          <TextAreaField label="技术备注" value={form.technique_notes} onChange={(value) => onChange({ ...form, technique_notes: value })} />
+          <TextAreaField label="器材" value={form.gear_list} onChange={(value) => onChange({ ...form, gear_list: value })} />
           <label className="field field--wide">
             <span>策划概述</span>
             <textarea value={form.notes} onChange={(event) => onChange({ ...form, notes: event.target.value })} rows={3} />
@@ -1561,17 +1558,20 @@ function PlanDetailModal({
           </div>
         </header>
         <div className="plan-modal-body">
-          <dl className="project-plan-detail-grid">
-            <DetailItem label="风格主题" value={plan.shooting_theme} />
-            <DetailItem label="器材" value={plan.gear_list} />
-            <DetailItem label="场景" value={plan.scene_list} />
-            <DetailItem label="动作 / 姿态" value={plan.action_list} />
-            <DetailItem label="构图参考" value={plan.composition_reference} />
-            <DetailItem label="光线参考" value={plan.lighting_reference} />
-            <DetailItem label="后期风格" value={plan.post_style} />
-            <DetailItem label="技术备注" value={plan.technique_notes} />
-            <DetailItem label="策划概述" value={plan.notes} />
-          </dl>
+          <div className="plan-detail-summary">
+            <div>
+              <span>风格主题</span>
+              <p>{plan.shooting_theme || "-"}</p>
+            </div>
+            <div>
+              <span>器材</span>
+              <p>{plan.gear_list || "-"}</p>
+            </div>
+            <div>
+              <span>策划概述</span>
+              <p>{plan.notes || "-"}</p>
+            </div>
+          </div>
 
           <section className="plan-detail-references">
             <div className="reference-section-title">
@@ -1608,15 +1608,6 @@ function PlanDetailModal({
           )}
         </div>
       </section>
-    </div>
-  );
-}
-
-function DetailItem({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{value || "-"}</dd>
     </div>
   );
 }

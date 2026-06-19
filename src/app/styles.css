@@ -671,17 +671,15 @@ a {
   z-index: 5;
   top: 50%;
   display: flex;
-  width: 28px;
-  height: 76px;
+  width: 24px;
+  height: 48px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 248, 236, 0.34);
-  border-radius: 999px;
+  border: 0;
   color: #fff8ec;
-  background: rgba(37, 31, 25, 0.22);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 10px 24px rgba(37, 31, 25, 0.14);
-  font-size: 25px;
+  background: transparent;
+  filter: drop-shadow(0 2px 8px rgba(37, 31, 25, 0.55));
+  font-size: 32px;
   font-weight: 800;
   line-height: 1;
   opacity: 0;
@@ -690,17 +688,17 @@ a {
   transition:
     opacity 0.16s ease,
     transform 0.16s ease,
-    background 0.16s ease;
+    color 0.16s ease;
 }
 
 .plan-side-order-left {
-  left: 8px;
-  transform: translate(-2px, -50%);
+  left: -2px;
+  transform: translate(-4px, -50%);
 }
 
 .plan-side-order-right {
-  right: 8px;
-  transform: translate(2px, -50%);
+  right: -2px;
+  transform: translate(4px, -50%);
 }
 
 .shooting-plan-card--compact:hover .plan-side-order,
@@ -720,19 +718,20 @@ a {
 }
 
 .plan-side-order:hover {
-  border-color: rgba(255, 248, 236, 0.62);
-  background: rgba(37, 31, 25, 0.42);
+  color: #ffffff;
+  background: transparent;
+  transform: translate(0, -50%) scale(1.08);
 }
 
 .shooting-plan-card:not(.shooting-plan-card--with-cover) .plan-side-order {
-  border-color: rgba(120, 94, 58, 0.22);
   color: #6d5429;
-  background: rgba(255, 252, 247, 0.78);
+  background: transparent;
+  filter: drop-shadow(0 2px 7px rgba(255, 250, 242, 0.95));
 }
 
 .shooting-plan-card:not(.shooting-plan-card--with-cover) .plan-side-order:hover {
-  border-color: #d9a94c;
-  background: #fff4d7;
+  color: #4f3712;
+  background: transparent;
 }
 
 .sort-fallback-button {
