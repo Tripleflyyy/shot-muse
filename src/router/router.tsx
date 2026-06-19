@@ -1,6 +1,5 @@
 import { createHashRouter, Navigate } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
-import DashboardPage from "../pages/DashboardPage";
 import InspirationLibraryPage from "../pages/InspirationLibraryPage";
 import ProjectsPage from "../pages/ProjectsPage";
 import SettingsPage from "../pages/SettingsPage";
@@ -14,15 +13,15 @@ export const router = createHashRouter([
     children: [
       {
         index: true,
-        element: <DashboardPage />,
-      },
-      {
-        path: "projects",
-        element: <ProjectsPage />,
+        element: <Navigate to="/inspiration" replace />,
       },
       {
         path: "inspiration",
         element: <InspirationLibraryPage />,
+      },
+      {
+        path: "projects",
+        element: <ProjectsPage />,
       },
       {
         path: "tags",
@@ -38,7 +37,7 @@ export const router = createHashRouter([
       },
       {
         path: "*",
-        element: <Navigate to="/" replace />,
+        element: <Navigate to="/inspiration" replace />,
       },
     ],
   },

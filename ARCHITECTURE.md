@@ -49,13 +49,21 @@ Plan References
 
 ### Dashboard 首页
 
-功能职责：展示最近更新的项目、最近收藏的灵感卡片、最近创建或编辑的拍摄计划，并提供进入核心模块的快捷入口。
+功能职责：作为“创作续接首页”，展示最近更新的项目、卡片和拍摄计划，提示活跃项目、待继续计划和待整理卡片，并提供进入核心模块的快捷入口。Dashboard 不是统计报表页，不直接承担编辑职责。
 
 主要页面：DashboardPage
 
-依赖的数据表：projects、inspiration_cards、shooting_plans、media_assets
+依赖的数据表：projects、inspiration_cards、shooting_plans、shooting_plan_inspirations、media_assets
 
-依赖的 Tauri commands：list_projects、list_inspiration_cards、list_shooting_plans
+依赖的 Tauri commands：list_projects、list_inspiration_cards、list_shooting_plans、list_shooting_plan_inspirations、list_media_assets_by_target
+
+当前 Dashboard 前端聚合：
+
+- Continue Working：按 `updated_at` / `created_at` 倒序展示最近 Projects、Plans、Cards。
+- Active Projects：基于 Project 下未完成 Plan 数量和更新时间展示活跃项目。
+- Ready / Draft Plans：优先展示 `draft` 和 `ready` 状态的 Plan，并显示封面、Project、参考卡片数量。
+- Unprocessed Cards：根据缺标签、缺备注、缺图片、未关联 Plan 判断待整理卡片。
+- Quick Actions：先跳转到 Card Library、Projects、Shooting Plans 页面，不做跨页面弹窗通信。
 
 ### Projects 项目模块
 
@@ -200,7 +208,7 @@ Plan Reference 规则：
 
 ## 3. 前端页面结构
 
-DashboardPage：展示最近 Project、最近卡片、最近 Plan，提供新建项目、新建卡片、进入拍摄计划的入口。
+DashboardPage：创作续接首页，展示 Continue Working、Active Projects、Ready / Draft Plans、Unprocessed Cards，并提供新建 Card / Project / Plan 的主流程入口。
 
 ProjectsPage：展示 Project 列表，支持创建、搜索、删除项目。Project 是大型拍摄任务 / 旅行 / 创作周期的组织容器。
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import PlaceholderCard from "../components/common/PlaceholderCard";
 import { getAppStatus, getLocalAppInfo, type AppStatus } from "../services/appApi";
 
@@ -46,10 +47,10 @@ export default function SettingsPage() {
   return (
     <section className="page-frame">
       <header className="page-header">
-        <p className="page-kicker">Settings</p>
-        <h1 className="page-title">Settings</h1>
+        <p className="page-kicker">SETTINGS</p>
+        <h1 className="page-title">设置</h1>
         <p className="page-copy">
-          后续会展示应用版本、本地数据库路径、媒体资源目录和导出目录。
+          Manage local app information, storage status, and advanced tools.
         </p>
       </header>
 
@@ -101,6 +102,12 @@ export default function SettingsPage() {
         </PlaceholderCard>
         <PlaceholderCard title="Backup">
           预留本地备份入口。
+        </PlaceholderCard>
+        <PlaceholderCard title="Tag Management">
+          <p>Tags 页面作为高级标签管理入口，用于整理分类、颜色和自定义标签。</p>
+          <Link className="primary-button settings-entry-button" to="/tags">
+            打开 Tags 管理
+          </Link>
         </PlaceholderCard>
       </div>
     </section>

@@ -1,6 +1,7 @@
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useSearchParams } from "react-router-dom";
 
 import {
   CardType,
@@ -106,6 +107,7 @@ const emptyFilters: CardFiltersState = {
 };
 
 export default function InspirationLibraryPage() {
+  const [searchParams] = useSearchParams();
   const [cards, setCards] = useState<InspirationCard[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [form, setForm] = useState<CardFormState>(emptyForm);
@@ -116,6 +118,7 @@ export default function InspirationLibraryPage() {
   const [modalMode, setModalMode] = useState<CardModalMode>(null);
   const [selectedCard, setSelectedCard] = useState<InspirationCard | null>(null);
   const [isEditingDetail, setIsEditingDetail] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [pendingDeleteCard, setPendingDeleteCard] =
     useState<InspirationCard | null>(null);
   const [cardMedia, setCardMedia] = useState<Record<string, MediaAsset[]>>({});
@@ -134,6 +137,7 @@ export default function InspirationLibraryPage() {
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [carouselIndexes, setCarouselIndexes] = useState<Record<string, number>>({});
   const [activeMediaAssetId, setActiveMediaAssetId] = useState<string | null>(null);
+  const [openedCardParam, setOpenedCardParam] = useState("");
 
   const selectedTags = useMemo(
     () =>
@@ -182,6 +186,21 @@ export default function InspirationLibraryPage() {
     // Filters are applied explicitly by the toolbar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const cardId = searchParams.get("cardId");
+    if (!cardId || openedCardParam === cardId || cards.length === 0) {
+      return;
+    }
+
+    const targetCard = cards.find((card) => card.id === cardId);
+    if (!targetCard || !Object.prototype.hasOwnProperty.call(cardMedia, cardId)) {
+      return;
+    }
+
+    openDetailModal(targetCard);
+    setOpenedCardParam(cardId);
+  }, [cardMedia, cards, openedCardParam, searchParams]);
 
   useEffect(() => {
     if (!hoveredCardId) {
@@ -691,86 +710,104 @@ export default function InspirationLibraryPage() {
     <section className="page-frame">
       <header className="page-header card-library-page-header">
         <div>
-          <p className="page-kicker">Card Library</p>
+          <p className="page-kicker">CARD LIBRARY</p>
           <h1 className="page-title">卡片库</h1>
-          <p className="page-copy">管理摄影灵感与拍摄技巧卡片。</p>
+          <p className="page-copy">Manage photography inspiration and technique cards.</p>
         </div>
-        <button className="primary-button" type="button" onClick={openCreateModal}>
-          + New Card
-        </button>
+        <div className="page-icon-actions">
+          <button
+            aria-expanded={isFilterOpen}
+            aria-label={isFilterOpen ? "关闭检索" : "打开检索"}
+            className={`icon-action-button ${isFilterOpen ? "active" : ""}`}
+            type="button"
+            onClick={() => setIsFilterOpen((current) => !current)}
+          >
+            <span className="icon-action-symbol">⌕</span>
+          </button>
+          <button
+            aria-label="新建卡片"
+            className="icon-action-button icon-action-button--primary"
+            type="button"
+            onClick={openCreateModal}
+          >
+            <span className="icon-action-symbol">+</span>
+          </button>
+        </div>
       </header>
 
       <section className="list-panel card-library-panel">
-        <form
-          className="filter-panel search-filter-panel"
-          onSubmit={handleFilterSubmit}
-        >
-          <div className="card-library-tabs" role="tablist" aria-label="卡片类型视图">
-            {cardTypeTabs.map((tab) => (
-              <button
-                aria-selected={filters.card_type === tab.value}
-                className={
-                  filters.card_type === tab.value
-                    ? "card-library-tab card-library-tab--active"
-                    : "card-library-tab"
-                }
-                key={tab.value}
-                type="button"
-                onClick={() => {
-                  const nextFilters = { ...filters, card_type: tab.value };
-                  setFilters(nextFilters);
-                  void loadCards(nextFilters);
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="search-filter-bar">
-            <input
-              className="search-filter-input"
-              value={filters.keyword}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  keyword: event.target.value,
-                }))
-              }
-              placeholder="搜索标题 / 作者 / 备注 / 链接 / 标签..."
-            />
-            <select
-              className="search-filter-select"
-              value={filters.source_platform}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  source_platform: event.target.value as "" | SourcePlatform,
-                }))
-              }
-            >
-              <option value="">全部平台</option>
-              {sourcePlatforms.map((platform) => (
-                <option key={platform.value} value={platform.value}>
-                  {platform.label}
-                </option>
+        {isFilterOpen && (
+          <form
+            className="filter-panel search-filter-panel"
+            onSubmit={handleFilterSubmit}
+          >
+            <div className="card-library-tabs" role="tablist" aria-label="卡片类型视图">
+              {cardTypeTabs.map((tab) => (
+                <button
+                  aria-selected={filters.card_type === tab.value}
+                  className={
+                    filters.card_type === tab.value
+                      ? "card-library-tab card-library-tab--active"
+                      : "card-library-tab"
+                  }
+                  key={tab.value}
+                  type="button"
+                  onClick={() => {
+                    const nextFilters = { ...filters, card_type: tab.value };
+                    setFilters(nextFilters);
+                    void loadCards(nextFilters);
+                  }}
+                >
+                  {tab.label}
+                </button>
               ))}
-            </select>
-            <div className="search-filter-actions">
-              <button className="search-filter-button" type="submit">
-                筛选
-              </button>
-              <button
-                className="search-filter-reset"
-                type="button"
-                onClick={clearFilters}
-              >
-                清空
-              </button>
             </div>
-          </div>
-          <p className="filter-result-text">{cards.length} 张卡片</p>
-        </form>
+
+            <div className="search-filter-bar">
+              <input
+                className="search-filter-input"
+                value={filters.keyword}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    keyword: event.target.value,
+                  }))
+                }
+                placeholder="搜索标题 / 作者 / 备注 / 链接 / 标签..."
+              />
+              <select
+                className="search-filter-select"
+                value={filters.source_platform}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    source_platform: event.target.value as "" | SourcePlatform,
+                  }))
+                }
+              >
+                <option value="">全部平台</option>
+                {sourcePlatforms.map((platform) => (
+                  <option key={platform.value} value={platform.value}>
+                    {platform.label}
+                  </option>
+                ))}
+              </select>
+              <div className="search-filter-actions">
+                <button className="search-filter-button" type="submit">
+                  筛选
+                </button>
+                <button
+                  className="search-filter-reset"
+                  type="button"
+                  onClick={clearFilters}
+                >
+                  清空
+                </button>
+              </div>
+            </div>
+            <p className="filter-result-text">{cards.length} 张卡片</p>
+          </form>
+        )}
 
         {isLoading ? (
           <p className="muted-text">正在加载卡片...</p>

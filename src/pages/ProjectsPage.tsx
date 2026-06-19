@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useSearchParams } from "react-router-dom";
 
 import { CardType, InspirationCard, SourcePlatform } from "../services/inspirationApi";
 import {
@@ -127,6 +128,7 @@ const referenceCardTypeFilters: Array<{
 ];
 
 export default function ProjectsPage() {
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [plans, setPlans] = useState<ShootingPlan[]>([]);
   const [referenceCounts, setReferenceCounts] = useState<Record<string, number>>({});
@@ -164,6 +166,8 @@ export default function ProjectsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
+  const [openedProjectParam, setOpenedProjectParam] = useState("");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const activeReferencePlan = useMemo(
     () => plans.find((plan) => plan.id === activeReferencePlanId) ?? null,
@@ -197,6 +201,26 @@ export default function ProjectsPage() {
     // Load once on page mount; search is explicit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const projectId = searchParams.get("projectId");
+    if (!projectId || openedProjectParam === projectId || projects.length === 0) {
+      return;
+    }
+
+    if (!projects.some((project) => project.id === projectId)) {
+      return;
+    }
+
+    setExpandedProjectIds((current) => new Set(current).add(projectId));
+
+    window.setTimeout(() => {
+      document
+        .querySelector(`[data-project-id="${CSS.escape(projectId)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    setOpenedProjectParam(projectId);
+  }, [openedProjectParam, projects, searchParams]);
 
   async function loadWorkspace(searchKeyword = keyword) {
     setIsLoading(true);
@@ -914,40 +938,56 @@ export default function ProjectsPage() {
     <section className="page-frame">
       <header className="page-header plans-page-header">
         <div className="plans-page-header-main">
-          <p className="page-kicker">Projects</p>
-          <h1 className="page-title">Photography Projects</h1>
+          <p className="page-kicker">PROJECTS</p>
+          <h1 className="page-title">项目</h1>
           <p className="page-copy">
-            Project 像一个拍摄目录：先建立旅行、商拍或创作周期，再在里面拆解具体 Plans。
+            Organize shooting projects and break them into executable plans.
           </p>
         </div>
-        <div className="plans-page-actions">
-          <button className="primary-button new-plan-button" type="button" onClick={openNewProjectModal}>
-            + New Project
+        <div className="plans-page-actions page-icon-actions">
+          <button
+            aria-expanded={isFilterOpen}
+            aria-label={isFilterOpen ? "关闭检索" : "打开检索"}
+            className={`icon-action-button ${isFilterOpen ? "active" : ""}`}
+            type="button"
+            onClick={() => setIsFilterOpen((current) => !current)}
+          >
+            <span className="icon-action-symbol">⌕</span>
+          </button>
+          <button
+            aria-label="新建项目"
+            className="icon-action-button icon-action-button--primary"
+            type="button"
+            onClick={openNewProjectModal}
+          >
+            <span className="icon-action-symbol">+</span>
           </button>
         </div>
       </header>
 
       <section className="plans-workspace">
-        <form className="search-filter-panel projects-filter-panel" onSubmit={handleSearch}>
-          <div className="filter-panel-title">
-            <strong>搜索项目目录</strong>
-            <span>{projects.length} 个 Project</span>
-          </div>
-          <div className="search-filter-bar projects-filter-bar">
-            <input
-              className="search-filter-input"
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜索项目名称 / 主题 / 描述 / 地点..."
-            />
-            <div className="search-filter-actions">
-              <button className="search-filter-button" type="submit">筛选</button>
-              <button className="search-filter-reset" type="button" onClick={() => void clearSearch()}>
-                清空
-              </button>
+        {isFilterOpen && (
+          <form className="search-filter-panel projects-filter-panel" onSubmit={handleSearch}>
+            <div className="filter-panel-title">
+              <strong>搜索项目目录</strong>
+              <span>{projects.length} 个 Project</span>
             </div>
-          </div>
-        </form>
+            <div className="search-filter-bar projects-filter-bar">
+              <input
+                className="search-filter-input"
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="搜索项目名称 / 主题 / 描述 / 地点..."
+              />
+              <div className="search-filter-actions">
+                <button className="search-filter-button" type="submit">筛选</button>
+                <button className="search-filter-reset" type="button" onClick={() => void clearSearch()}>
+                  清空
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
 
         {isLoading ? (
           <p className="muted-text">正在加载项目...</p>
@@ -962,6 +1002,7 @@ export default function ProjectsPage() {
               return (
                 <section
                   className="project-directory-section"
+                  data-project-id={project.id}
                   key={project.id}
                 >
                   <header className="project-directory-header">

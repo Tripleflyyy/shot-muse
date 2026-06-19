@@ -122,38 +122,6 @@ a {
   overflow-y: auto;
 }
 
-.topbar {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  border-bottom: 1px solid #ded8ce;
-  padding: 16px 32px;
-  background: #fffaf3;
-}
-
-.topbar__title {
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.2;
-}
-
-.topbar__description {
-  margin: 4px 0 0;
-  color: #70685f;
-  font-size: 14px;
-}
-
-.topbar__search {
-  width: min(320px, 36vw);
-  border: 1px solid #d6d0c7;
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: #595149;
-  background: #ffffff;
-}
-
 .page-frame {
   width: 100%;
   max-width: 1180px;
@@ -165,26 +133,26 @@ a {
 }
 
 .page-kicker {
-  margin: 0 0 8px;
+  margin: 0 0 12px;
   color: #8a5d1f;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .page-title {
   margin: 0;
   color: #1f1c18;
-  font-size: 32px;
-  line-height: 1.15;
+  font-size: 38px;
+  line-height: 1.08;
 }
 
 .page-copy {
   max-width: 680px;
-  margin: 10px 0 0;
+  margin: 18px 0 0;
   color: #625a51;
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1.6;
 }
 
@@ -256,6 +224,14 @@ a {
   overflow-wrap: anywhere;
 }
 
+.settings-entry-button {
+  display: inline-flex;
+  width: auto;
+  margin-top: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
 .crud-layout {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
@@ -313,6 +289,64 @@ a {
 
 .plans-page-actions {
   flex: 0 0 auto;
+}
+
+.page-icon-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.icon-action-button {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(120, 94, 58, 0.2);
+  border-radius: 999px;
+  color: #4a3f34;
+  background: rgba(255, 252, 247, 0.92);
+  box-shadow: 0 8px 18px rgba(80, 60, 40, 0.08);
+  cursor: pointer;
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0;
+  text-align: center;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.icon-action-button:hover,
+.icon-action-button.active {
+  border-color: #d7a84a;
+  background: #fff3d4;
+  box-shadow: 0 10px 22px rgba(128, 93, 36, 0.14);
+  transform: translateY(-1px);
+}
+
+.icon-action-button--primary {
+  border-color: #c8973f;
+  color: #1f1c18;
+  background: #f0c36a;
+  font-size: 25px;
+  font-weight: 500;
+}
+
+.icon-action-symbol {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transform: translateY(-0.02em);
 }
 
 .plans-page-actions .primary-button {
