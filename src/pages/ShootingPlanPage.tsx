@@ -268,10 +268,7 @@ export default function ShootingPlanPage() {
         return plan;
       }
 
-      const updatedPlan = {
-        ...plan,
-        cover_media_asset_id: imported.id,
-      };
+      const updatedPlan = await updateShootingPlanCover(plan.id, imported.id);
       setPlanCoverMap((current) => ({
         ...current,
         [plan.id]: imported,

@@ -520,33 +520,35 @@ a {
 
 .project-directory-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
   min-width: 0;
   padding: 14px;
   background: linear-gradient(180deg, #fffdf9, #fff7ed);
-  cursor: grab;
-}
-
-.project-directory-header:active {
-  cursor: grabbing;
 }
 
 .project-toggle-button {
   display: inline-flex;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(120, 94, 58, 0.16);
   border-radius: 999px;
   color: #3b342e;
   background: rgba(255, 252, 247, 0.9);
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
   line-height: 1;
+  padding: 0;
   cursor: pointer;
+}
+
+.project-toggle-button span[aria-hidden="true"] {
+  display: block;
+  line-height: 1;
+  transform: translateY(-1px);
 }
 
 .project-toggle-button:hover {
@@ -611,6 +613,12 @@ a {
   background: #fff4d7;
 }
 
+.icon-button:disabled,
+.sort-fallback-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
 .icon-button--danger {
   color: #9b322d;
 }
@@ -670,13 +678,85 @@ a {
   min-height: 280px;
 }
 
-.project-plan-workspace-card[draggable="true"] {
+.sort-drag-handle {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(120, 94, 58, 0.16);
+  border-radius: 999px;
+  color: #7a6550;
+  background: rgba(255, 252, 247, 0.84);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -4px;
+  line-height: 1;
   cursor: grab;
   user-select: none;
 }
 
-.project-plan-workspace-card[draggable="true"]:active {
+.sort-drag-handle:hover,
+.sort-drag-handle:focus-visible {
+  border-color: #d9a94c;
+  background: #fff4d7;
+  outline: none;
+}
+
+.sort-drag-handle:active {
   cursor: grabbing;
+}
+
+.plan-card-sort-tools {
+  position: absolute;
+  z-index: 4;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 252, 247, 0.72);
+  opacity: 0;
+  transition:
+    opacity 0.16s ease,
+    background 0.16s ease;
+}
+
+.project-plan-workspace-card:hover .plan-card-sort-tools,
+.project-plan-workspace-card:focus-within .plan-card-sort-tools,
+.project-plan-workspace-card.is-dragging .plan-card-sort-tools,
+.project-plan-workspace-card.is-drag-over .plan-card-sort-tools {
+  opacity: 1;
+}
+
+.sort-fallback-button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(120, 94, 58, 0.16);
+  border-radius: 999px;
+  color: #4a3f34;
+  background: rgba(255, 252, 247, 0.9);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sort-fallback-button:hover:not(:disabled) {
+  border-color: #d9a94c;
+  background: #fff4d7;
+}
+
+.sort-fallback-button--mini {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
 }
 
 .project-plan-add-card {

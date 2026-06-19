@@ -443,10 +443,7 @@ export default function ProjectsPage() {
         return plan;
       }
 
-      const updatedPlan = {
-        ...plan,
-        cover_media_asset_id: imported.id,
-      };
+      const updatedPlan = await updateShootingPlanCover(plan.id, imported.id);
       setPlanCoverMap((current) => ({
         ...current,
         [plan.id]: imported,
@@ -739,6 +736,23 @@ export default function ProjectsPage() {
     });
   }
 
+  async function persistProjectOrder(nextOrder: string[]) {
+    setProjects((current) =>
+      nextOrder
+        .map((id) => current.find((project) => project.id === id))
+        .filter((project): project is Project => Boolean(project)),
+    );
+
+    try {
+      await reorderProjects(nextOrder);
+      await loadWorkspace();
+    } catch (error) {
+      console.error("调整 Project 顺序失败", error);
+      alert(toErrorMessage(error, "调整 Project 顺序失败"));
+      await loadWorkspace();
+    }
+  }
+
   async function dropProject(targetProjectId: string) {
     if (draggingPlan) {
       return;
@@ -761,19 +775,40 @@ export default function ProjectsPage() {
     const nextOrder = [...ids];
     const [moved] = nextOrder.splice(fromIndex, 1);
     nextOrder.splice(toIndex, 0, moved);
-    setProjects((current) =>
-      nextOrder
-        .map((id) => current.find((project) => project.id === id))
-        .filter((project): project is Project => Boolean(project)),
-    );
     setDraggingProjectId(null);
     setDragOverProjectId(null);
+    await persistProjectOrder(nextOrder);
+  }
+
+  async function moveProject(projectId: string, direction: -1 | 1) {
+    const ids = projects.map((project) => project.id);
+    const currentIndex = ids.indexOf(projectId);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= ids.length) {
+      return;
+    }
+
+    const nextOrder = [...ids];
+    const [moved] = nextOrder.splice(currentIndex, 1);
+    nextOrder.splice(targetIndex, 0, moved);
+    await persistProjectOrder(nextOrder);
+  }
+
+  async function persistPlanOrder(targetProjectId: string, nextOrder: string[]) {
+    setPlans((current) => {
+      const movedPlans = nextOrder
+        .map((id) => current.find((plan) => plan.id === id))
+        .filter((plan): plan is ShootingPlan => Boolean(plan));
+      const otherPlans = current.filter((plan) => plan.project_id !== targetProjectId);
+      return [...otherPlans, ...movedPlans];
+    });
 
     try {
-      await reorderProjects(nextOrder);
+      await reorderShootingPlans(targetProjectId, nextOrder);
       await loadWorkspace();
     } catch (error) {
-      alert(toErrorMessage(error, "调整 Project 顺序失败"));
+      console.error("调整 Plan 顺序失败", error);
+      alert(toErrorMessage(error, "调整 Plan 顺序失败"));
       await loadWorkspace();
     }
   }
@@ -803,24 +838,23 @@ export default function ProjectsPage() {
     const [moved] = nextOrder.splice(fromIndex, 1);
     const adjustedIndex = targetPlanId && fromIndex < toIndex ? toIndex - 1 : toIndex;
     nextOrder.splice(adjustedIndex, 0, moved);
-    setPlans((current) => {
-      const movedPlans = nextOrder
-        .map((id) => current.find((plan) => plan.id === id))
-        .filter((plan): plan is ShootingPlan => Boolean(plan));
-      const otherPlans = current.filter((plan) => plan.project_id !== targetProjectId);
-      return [...otherPlans, ...movedPlans];
-    });
     setDraggingPlan(null);
     setDragOverPlanId(null);
+    await persistPlanOrder(targetProjectId, nextOrder);
+  }
 
-    try {
-      await reorderShootingPlans(targetProjectId, nextOrder);
-      await loadWorkspace();
-    } catch (error) {
-      console.error("调整 Plan 顺序失败", error);
-      alert(toErrorMessage(error, "调整 Plan 顺序失败"));
-      await loadWorkspace();
+  async function movePlan(projectId: string, planId: string, direction: -1 | 1) {
+    const projectPlanIds = (plansByProject[projectId] ?? []).map((plan) => plan.id);
+    const currentIndex = projectPlanIds.indexOf(planId);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= projectPlanIds.length) {
+      return;
     }
+
+    const nextOrder = [...projectPlanIds];
+    const [moved] = nextOrder.splice(currentIndex, 1);
+    nextOrder.splice(targetIndex, 0, moved);
+    await persistPlanOrder(projectId, nextOrder);
   }
 
   function requestDeleteProject(project: Project) {
@@ -973,7 +1007,7 @@ export default function ProjectsPage() {
           <p className="empty-message">暂无 Project。先创建一个拍摄目录吧。</p>
         ) : (
           <div className="project-directory-list">
-            {projects.map((project) => {
+            {projects.map((project, projectIndex) => {
               const projectPlans = plansByProject[project.id] ?? [];
               const isExpanded = expandedProjectIds.has(project.id);
 
@@ -993,22 +1027,26 @@ export default function ProjectsPage() {
                   }}
                   onDrop={() => void dropProject(project.id)}
                 >
-                  <header
-                    className="project-directory-header"
-                    draggable
-                    onDragStart={(event) => {
-                      if ((event.target as HTMLElement).closest("button, input, select, textarea, a")) {
-                        event.preventDefault();
-                        return;
-                      }
-                      setDraggingProjectId(project.id);
-                      event.dataTransfer.effectAllowed = "move";
-                    }}
-                    onDragEnd={() => {
-                      setDraggingProjectId(null);
-                      setDragOverProjectId(null);
-                    }}
-                  >
+                  <header className="project-directory-header">
+                    <span
+                      aria-label="拖动排序 Project"
+                      className="sort-drag-handle project-sort-handle"
+                      draggable
+                      role="button"
+                      title="拖动排序 Project"
+                      onClick={(event) => event.stopPropagation()}
+                      onDragStart={(event) => {
+                        event.stopPropagation();
+                        setDraggingProjectId(project.id);
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        setDraggingProjectId(null);
+                        setDragOverProjectId(null);
+                      }}
+                    >
+                      ⋮⋮
+                    </span>
                     <button
                       className="project-toggle-button"
                       type="button"
@@ -1034,6 +1072,30 @@ export default function ProjectsPage() {
                     </div>
                     <span className="project-plan-count">{projectPlans.length} Plans</span>
                     <div className="project-directory-actions">
+                      <button
+                        className="icon-button sort-fallback-button"
+                        type="button"
+                        title="Project 上移"
+                        disabled={projectIndex === 0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void moveProject(project.id, -1);
+                        }}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        className="icon-button sort-fallback-button"
+                        type="button"
+                        title="Project 下移"
+                        disabled={projectIndex === projects.length - 1}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void moveProject(project.id, 1);
+                        }}
+                      >
+                        ↓
+                      </button>
                       <button
                         className="icon-button"
                         type="button"
@@ -1077,7 +1139,7 @@ export default function ProjectsPage() {
                   {isExpanded && (
                     <div className="project-directory-body">
                       <div className="project-plan-card-grid">
-                        {projectPlans.map((plan) => {
+                        {projectPlans.map((plan, planIndex) => {
                           const preview = planReferencePreviewMap[plan.id] ?? {
                             cards: [],
                             total: 0,
@@ -1097,9 +1159,13 @@ export default function ProjectsPage() {
                               isDragOver={dragOverPlanId === plan.id}
                               preview={preview}
                               isReferenceActive={isReferenceModalOpen && activeReferencePlanId === plan.id}
+                              canMoveUp={planIndex > 0}
+                              canMoveDown={planIndex < projectPlans.length - 1}
                               onBrokenReferenceCover={markCoverBroken}
                               onCoverBroken={() => markPlanCoverBroken(plan.id)}
                               onOpen={() => setSelectedPlan(plan)}
+                              onMoveUp={() => void movePlan(project.id, plan.id, -1)}
+                              onMoveDown={() => void movePlan(project.id, plan.id, 1)}
                               onDragStart={() => setDraggingPlan({ projectId: project.id, planId: plan.id })}
                               onDragOver={() => setDragOverPlanId(plan.id)}
                               onDrop={() => void dropPlan(project.id, plan.id)}
@@ -1247,11 +1313,15 @@ function PlanCard({
   inspirationCoverMap,
   brokenCoverIds,
   isReferenceActive,
+  canMoveUp,
+  canMoveDown,
   isDragging,
   isDragOver,
   onBrokenReferenceCover,
   onCoverBroken,
   onOpen,
+  onMoveUp,
+  onMoveDown,
   onDragStart,
   onDragOver,
   onDrop,
@@ -1264,11 +1334,15 @@ function PlanCard({
   inspirationCoverMap: Record<string, MediaAsset | null>;
   brokenCoverIds: Set<string>;
   isReferenceActive: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   isDragging: boolean;
   isDragOver: boolean;
   onBrokenReferenceCover: (cardId: string) => void;
   onCoverBroken: () => void;
   onOpen: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onDragStart: () => void;
   onDragOver: (event: DragEvent<HTMLElement>) => void;
   onDrop: () => void;
@@ -1283,13 +1357,7 @@ function PlanCard({
       } ${
         isDragging ? "is-dragging" : ""
       }`}
-      draggable
       onClick={onOpen}
-      onDragStart={(event) => {
-        event.stopPropagation();
-        event.dataTransfer.effectAllowed = "move";
-        onDragStart();
-      }}
       onDragOver={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1313,6 +1381,44 @@ function PlanCard({
         }
       }}
     >
+      <div className="plan-card-sort-tools" onClick={(event) => event.stopPropagation()}>
+        <span
+          aria-label="拖动排序 Plan"
+          className="sort-drag-handle plan-sort-handle"
+          draggable
+          role="button"
+          title="拖动排序 Plan"
+          onDragStart={(event) => {
+            event.stopPropagation();
+            event.dataTransfer.effectAllowed = "move";
+            onDragStart();
+          }}
+          onDragEnd={(event) => {
+            event.stopPropagation();
+            onDragEnd();
+          }}
+        >
+          ⋮⋮
+        </span>
+        <button
+          aria-label="Plan 上移"
+          className="sort-fallback-button sort-fallback-button--mini"
+          disabled={!canMoveUp}
+          type="button"
+          onClick={onMoveUp}
+        >
+          ↑
+        </button>
+        <button
+          aria-label="Plan 下移"
+          className="sort-fallback-button sort-fallback-button--mini"
+          disabled={!canMoveDown}
+          type="button"
+          onClick={onMoveDown}
+        >
+          ↓
+        </button>
+      </div>
       {hasCover && coverAsset && (
         <img
           alt=""
