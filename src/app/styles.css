@@ -643,75 +643,6 @@ a {
   user-select: none;
 }
 
-.project-plan-card {
-  display: grid;
-  gap: 11px;
-  min-width: 0;
-  border: 1px solid #eadfce;
-  border-radius: 14px;
-  padding: 12px;
-  background: #fffdf9;
-}
-
-.project-plan-card-header {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.project-plan-card-header div {
-  min-width: 0;
-}
-
-.project-plan-card-header h3 {
-  margin: 0;
-  color: #2f2a25;
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-
-.project-plan-card-header p {
-  margin: 4px 0 0;
-  color: #6b635a;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.project-plan-card-lines {
-  display: grid;
-  gap: 6px;
-}
-
-.project-plan-card-lines p {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 8px;
-  margin: 0;
-  color: #3b342e;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.project-plan-card-lines span {
-  color: #8a7660;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.project-plan-card-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
-  min-width: 0;
-}
-
-.project-plan-card-controls button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .project-plan-add-card {
   display: grid;
   place-items: center;
@@ -743,10 +674,6 @@ a {
 
 .project-plan-add-card strong {
   font-size: 14px;
-}
-
-.project-plan-card-controls select {
-  min-width: 0;
 }
 
 .project-plan-form-grid {
@@ -3595,8 +3522,7 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .project-directory-header,
-  .project-plan-card-controls {
+  .project-directory-header {
     grid-template-columns: 1fr;
   }
 
