@@ -1989,7 +1989,7 @@ button:disabled {
 }
 
 .plan-reference-preview img,
-.plan-reference-preview span {
+.plan-reference-preview-placeholder {
   display: block;
   width: 100%;
   height: 100%;
@@ -1999,7 +1999,7 @@ button:disabled {
   object-fit: cover;
 }
 
-.plan-reference-preview span {
+.plan-reference-preview-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2008,6 +2008,16 @@ button:disabled {
   font-size: 9px;
   font-weight: 700;
   text-align: center;
+}
+
+.plan-reference-preview .card-type-badge {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  left: 5px;
+  padding: 2px 5px;
+  font-size: 9px;
+  box-shadow: 0 4px 10px rgba(55, 42, 29, 0.12);
 }
 
 .plan-reference-preview strong {
@@ -2589,6 +2599,37 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) minmax(140px, 180px) auto;
 }
 
+.reference-type-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reference-type-tab {
+  border: 1px solid rgba(120, 94, 58, 0.2);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #5d5145;
+  background: rgba(255, 252, 247, 0.82);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.reference-type-tab:hover,
+.reference-type-tab.selected {
+  border-color: #d9a94c;
+  color: #5b3a08;
+  background: #fff4d7;
+}
+
 .selected-reference-strip {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -2646,6 +2687,23 @@ button:disabled {
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
+}
+
+.reference-card-tools .card-type-badge {
+  align-self: center;
+  background: rgba(255, 252, 247, 0.94);
+  box-shadow: 0 4px 12px rgba(55, 42, 29, 0.08);
+}
+
+.reference-card-body > .card-type-badge {
+  justify-self: flex-start;
+  width: fit-content;
+  margin-bottom: 4px;
+}
+
+.reference-modal-header .muted-text .card-type-badge {
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 .reference-card--selected .reference-cover,

@@ -148,18 +148,20 @@ Plan References
 
 ### Shooting Plans 拍摄计划模块
 
-功能职责：创建、编辑、删除 Plan。Plan 必须属于 Project，是具体拍摄主题、子任务或子文件；Plan 从卡片库中选择参考灵感卡和技巧卡，保存拍摄主题、器材清单、场景清单、动作清单、构图参考、光线参考、后期风格和备注。
+功能职责：创建、编辑、删除 Plan。Plan 必须属于 Project，是具体拍摄主题、子任务或子文件；Plan 从统一卡片库中选择参考卡片（灵感卡和技巧卡），保存拍摄主题、器材清单、场景清单、动作清单、构图参考、光线参考、后期风格和备注。
 
 主要页面：ShootingPlanPage、ShootingPlanDetailPage
 
-依赖的数据表：shooting_plans、shooting_plan_inspirations、shooting_plan_techniques、projects、inspiration_cards、technique_cards、tags
+依赖的数据表：shooting_plans、shooting_plan_inspirations、projects、inspiration_cards、tags
 
-依赖的 Tauri commands：create_shooting_plan、update_shooting_plan、delete_shooting_plan、get_shooting_plan、list_shooting_plans、attach_inspiration_to_shooting_plan、detach_inspiration_from_shooting_plan、list_shooting_plan_inspirations、list_available_inspirations_for_shooting_plan；后续增加技巧卡引用和 Markdown 导出。
+依赖的 Tauri commands：create_shooting_plan、update_shooting_plan、delete_shooting_plan、get_shooting_plan、list_shooting_plans、attach_inspiration_to_shooting_plan、detach_inspiration_from_shooting_plan、list_shooting_plan_inspirations、list_available_inspirations_for_shooting_plan；命令名沿用 inspiration，但返回的 `InspirationCard` 已通过 `card_type` 承载灵感卡 / 技巧卡。
 
 Plan Reference 规则：
 
 - 关联只建立引用关系。
 - 不复制卡片。
+- 当前复用 `shooting_plan_inspirations` 表，产品层统一称为参考卡片。
+- 前端支持全部 / 灵感 / 技巧筛选。
 - 不移动卡片。
 - 移除关联不删除原卡片。
 - 一个卡片可以被多个 Plan 复用。

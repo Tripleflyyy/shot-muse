@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
-import { InspirationCard, SourcePlatform } from "../services/inspirationApi";
+import { CardType, InspirationCard, SourcePlatform } from "../services/inspirationApi";
 import {
   getMediaAssetDisplayUrl,
   getMediaAsset,
@@ -52,6 +52,7 @@ type ShootingPlanFilterState = {
 type PlanInspirationFilterState = {
   keyword: string;
   source_platform: "" | SourcePlatform;
+  card_type: "all" | CardType;
 };
 
 type PlanReferencePreview = {
@@ -83,6 +84,7 @@ const emptyFilters: ShootingPlanFilterState = {
 const emptyInspirationFilters: PlanInspirationFilterState = {
   keyword: "",
   source_platform: "",
+  card_type: "all",
 };
 
 const statuses: Array<{ value: ShootingPlanStatus; label: string }> = [
@@ -99,6 +101,15 @@ const sourcePlatforms: Array<{ value: SourcePlatform; label: string }> = [
   { value: "youtube", label: "YouTube" },
   { value: "instagram", label: "Instagram" },
   { value: "other", label: "其他" },
+];
+
+const referenceCardTypeFilters: Array<{
+  value: PlanInspirationFilterState["card_type"];
+  label: string;
+}> = [
+  { value: "all", label: "全部" },
+  { value: "inspiration", label: "灵感" },
+  { value: "technique", label: "技巧" },
 ];
 
 export default function ShootingPlanPage() {
@@ -150,6 +161,14 @@ export default function ShootingPlanPage() {
   const activeReferencePlan = useMemo(
     () => plans.find((plan) => plan.id === activeReferencePlanId) ?? null,
     [activeReferencePlanId, plans],
+  );
+  const visibleLinkedReferences = useMemo(
+    () => filterCardsByType(linkedInspirations, inspirationFilters.card_type),
+    [linkedInspirations, inspirationFilters.card_type],
+  );
+  const visibleAvailableReferences = useMemo(
+    () => filterCardsByType(availableInspirations, inspirationFilters.card_type),
+    [availableInspirations, inspirationFilters.card_type],
   );
   useEffect(() => {
     void loadInitialData();
@@ -480,10 +499,12 @@ export default function ShootingPlanPage() {
   }
 
   function managePlanInspirations(plan: ShootingPlan) {
+    const initialFilters = emptyInspirationFilters;
     setActiveReferencePlanId(plan.id);
     setIsReferenceModalOpen(true);
     setDetailInspiration(null);
-    void loadPlanReferences(plan.id, inspirationFilters);
+    setInspirationFilters(initialFilters);
+    void loadPlanReferences(plan.id, initialFilters);
   }
 
   function closeReferenceModal() {
@@ -508,7 +529,7 @@ export default function ShootingPlanPage() {
       setAvailableInspirations(available);
       await loadInspirationCovers([...linked, ...available]);
     } catch (error) {
-      alert(toErrorMessage(error, "加载计划参考灵感失败"));
+      alert(toErrorMessage(error, "加载计划参考卡片失败"));
     } finally {
       setIsReferenceLoading(false);
     }
@@ -541,7 +562,7 @@ export default function ShootingPlanPage() {
       await loadPlanReferences(activeReferencePlanId);
       await loadPlanPreviews(plans);
     } catch (error) {
-      alert(toErrorMessage(error, "加入计划参考灵感失败"));
+      alert(toErrorMessage(error, "加入计划参考卡片失败"));
     }
   }
 
@@ -559,8 +580,8 @@ export default function ShootingPlanPage() {
       await loadPlanReferences(activeReferencePlanId);
       await loadPlanPreviews(plans);
     } catch (error) {
-      console.error("移除计划参考灵感失败", error);
-      alert(toErrorMessage(error, "移除计划参考灵感失败"));
+      console.error("移除计划参考卡片失败", error);
+      alert(toErrorMessage(error, "移除计划参考卡片失败"));
     }
   }
 
@@ -572,7 +593,7 @@ export default function ShootingPlanPage() {
 
     const cover = inspirationCoverMap[card.id];
     if (!cover) {
-      alert("这张灵感还没有可用图片，无法设为封面");
+      alert("这张卡片还没有可用图片，无法设为封面");
       return;
     }
 
@@ -623,7 +644,7 @@ export default function ShootingPlanPage() {
             previewCover,
           };
         } catch (error) {
-          console.error("加载拍摄计划参考灵感预览失败", {
+          console.error("加载拍摄计划参考卡片预览失败", {
             planId: plan.id,
             error,
           });
@@ -689,7 +710,7 @@ export default function ShootingPlanPage() {
           const media = await listMediaAssetsByTarget("inspiration", card.id);
           return [card.id, media[0] ?? null] as const;
         } catch (error) {
-          console.error("加载参考灵感封面失败", { cardId: card.id, error });
+          console.error("加载参考卡片封面失败", { cardId: card.id, error });
           return [card.id, null] as const;
         }
       }),
@@ -714,7 +735,7 @@ export default function ShootingPlanPage() {
           const media = await listMediaAssetsByTarget("inspiration", card.id);
           return [card.id, media[0] ?? null] as const;
         } catch (error) {
-          console.error("加载参考灵感封面失败", { cardId: card.id, error });
+          console.error("加载参考卡片封面失败", { cardId: card.id, error });
           return [card.id, null] as const;
         }
       }),
@@ -1042,7 +1063,7 @@ export default function ShootingPlanPage() {
                         </span>
                       </div>
                       {isReferenceModalOpen && activeReferencePlanId === plan.id && (
-                        <p className="active-reference-label">正在管理参考灵感</p>
+                        <p className="active-reference-label">正在管理参考卡片</p>
                       )}
 
                       <div className="plan-compact-lines">
@@ -1086,7 +1107,7 @@ export default function ShootingPlanPage() {
               <div>
                 <p className="page-kicker">New Plan</p>
                 <h2 id="plan-form-modal-title">新建 Plan</h2>
-                <p className="muted-text">先保存 Plan，再在详情窗口中添加参考灵感。</p>
+                <p className="muted-text">先保存 Plan，再在详情窗口中添加参考卡片。</p>
               </div>
               <div className="modal-header-actions">
                 {renderStatusSelect()}
@@ -1183,7 +1204,7 @@ export default function ShootingPlanPage() {
                   <section className="plan-detail-references">
                     <div className="reference-section-title">
                       <div>
-                        <h3>参考灵感</h3>
+                        <h3>参考卡片</h3>
                         <p className="muted-text">当前 Plan 已选择的参考内容。</p>
                       </div>
                     </div>
@@ -1210,7 +1231,7 @@ export default function ShootingPlanPage() {
                       type="button"
                       onClick={() => managePlanInspirations(selectedPlanForDetail)}
                     >
-                      添加 / 管理参考灵感
+                      添加 / 管理参考卡片
                     </button>
                     <button
                       className="danger-button"
@@ -1259,7 +1280,7 @@ export default function ShootingPlanPage() {
             <header className="reference-modal-header">
               <div>
                 <p className="page-kicker">Plan References</p>
-                <h2 id="reference-modal-title">管理参考灵感</h2>
+                <h2 id="reference-modal-title">管理参考卡片</h2>
                 <p className="muted-text">
                   当前计划：{activeReferencePlan.title}
                   {activeReferencePlan.project_name
@@ -1268,7 +1289,7 @@ export default function ShootingPlanPage() {
                 </p>
               </div>
               <button
-                aria-label="关闭参考灵感管理"
+                aria-label="关闭参考卡片管理"
                 className="reference-modal-close"
                 type="button"
                 onClick={closeReferenceModal}
@@ -1279,25 +1300,25 @@ export default function ShootingPlanPage() {
 
             <div className="reference-modal-body">
               {isReferenceLoading ? (
-                <p className="muted-text">正在加载参考灵感...</p>
+                <p className="muted-text">正在加载参考卡片...</p>
               ) : (
                 <>
                   <section className="reference-modal-section">
                     <div className="reference-section-title">
                       <div>
-                        <h3>已选参考灵感</h3>
+                        <h3>已选参考卡片</h3>
                         <p className="muted-text">
-                          这些灵感会作为当前拍摄计划的模仿和执行参考。
+                          这些卡片会作为当前拍摄计划的模仿、技巧和执行参考。
                         </p>
                       </div>
-                      <span>{linkedInspirations.length} 个已选</span>
+                      <span>{visibleLinkedReferences.length} / {linkedInspirations.length} 个已选</span>
                     </div>
 
-                    {linkedInspirations.length === 0 ? (
-                      <p className="empty-message">还没有为该计划选择参考灵感。</p>
+                    {visibleLinkedReferences.length === 0 ? (
+                      <p className="empty-message">还没有匹配的已选参考卡片。</p>
                     ) : (
                       <div className="selected-reference-strip">
-                        {linkedInspirations.map((card) => (
+                        {visibleLinkedReferences.map((card) => (
                           <article
                             className="reference-card reference-card--selected reference-card--clickable"
                             key={card.id}
@@ -1305,6 +1326,9 @@ export default function ShootingPlanPage() {
                             title="取消选择"
                           >
                             <div className="reference-card-tools">
+                              <span className={`card-type-badge card-type-badge--${card.card_type}`}>
+                                {cardTypeLabel(card.card_type)}
+                              </span>
                               <button
                                 aria-label={`展开 ${card.title} 详情`}
                                 type="button"
@@ -1365,8 +1389,27 @@ export default function ShootingPlanPage() {
                       onSubmit={handleInspirationFilter}
                     >
                       <div className="filter-panel-title">
-                        <strong>从灵感库添加</strong>
-                        <span>{availableInspirations.length} 个可加入灵感</span>
+                        <strong>从卡片库添加</strong>
+                        <span>{visibleAvailableReferences.length} / {availableInspirations.length} 个可加入卡片</span>
+                      </div>
+                      <div className="reference-type-tabs" aria-label="参考卡片类型筛选">
+                        {referenceCardTypeFilters.map((item) => (
+                          <button
+                            key={item.value}
+                            type="button"
+                            className={`reference-type-tab ${
+                              inspirationFilters.card_type === item.value ? "selected" : ""
+                            }`}
+                            onClick={() =>
+                              setInspirationFilters((current) => ({
+                                ...current,
+                                card_type: item.value,
+                              }))
+                            }
+                          >
+                            {item.label}
+                          </button>
+                        ))}
                       </div>
                       <div className="search-filter-bar reference-modal-filter-bar">
                         <input
@@ -1412,11 +1455,11 @@ export default function ShootingPlanPage() {
                       </div>
                     </form>
 
-                    {availableInspirations.length === 0 ? (
-                      <p className="empty-message">没有匹配的可加入灵感。</p>
+                    {visibleAvailableReferences.length === 0 ? (
+                      <p className="empty-message">没有匹配的可加入参考卡片。</p>
                     ) : (
                       <div className="reference-card-wall">
-                        {availableInspirations.map((card) => (
+                        {visibleAvailableReferences.map((card) => (
                           <article
                             className="reference-card reference-card--wall reference-card--clickable"
                             key={card.id}
@@ -1424,6 +1467,9 @@ export default function ShootingPlanPage() {
                             title="加入计划"
                           >
                             <div className="reference-card-tools">
+                              <span className={`card-type-badge card-type-badge--${card.card_type}`}>
+                                {cardTypeLabel(card.card_type)}
+                              </span>
                               <button
                                 aria-label={`展开 ${card.title} 详情`}
                                 type="button"
@@ -1520,6 +1566,21 @@ function platformLabel(platform: string): string {
   );
 }
 
+function cardTypeLabel(cardType: string): string {
+  return cardType === "technique" ? "技巧" : "灵感";
+}
+
+function filterCardsByType(
+  cards: InspirationCard[],
+  cardType: PlanInspirationFilterState["card_type"],
+): InspirationCard[] {
+  if (cardType === "all") {
+    return cards;
+  }
+
+  return cards.filter((card) => card.card_type === cardType);
+}
+
 function InspirationCover({
   asset,
   isBroken,
@@ -1537,7 +1598,7 @@ function InspirationCover({
     <div className="reference-cover">
       <img
         src={getMediaAssetDisplayUrl(asset)}
-        alt={asset.original_filename ?? "参考灵感图片"}
+        alt={asset.original_filename ?? "参考卡片图片"}
         onError={(event) => {
           console.error("plan reference image load failed", {
             asset,
@@ -1562,7 +1623,7 @@ function PlanReferencePreviewList({
   onBroken: (cardId: string) => void;
 }) {
   if (preview.cards.length === 0) {
-    return <p className="plan-reference-empty">暂无参考灵感</p>;
+    return <p className="plan-reference-empty">暂无参考卡片</p>;
   }
 
   return (
@@ -1573,6 +1634,9 @@ function PlanReferencePreviewList({
 
         return (
           <div className="plan-reference-preview" key={card.id}>
+            <span className={`card-type-badge card-type-badge--${card.card_type}`}>
+              {cardTypeLabel(card.card_type)}
+            </span>
             {cover && !isBroken ? (
               <img
                 src={getMediaAssetDisplayUrl(cover)}
@@ -1580,7 +1644,7 @@ function PlanReferencePreviewList({
                 onError={() => onBroken(card.id)}
               />
             ) : (
-              <span>暂无图片</span>
+              <span className="plan-reference-preview-placeholder">暂无图片</span>
             )}
             <strong>{card.title}</strong>
           </div>
@@ -1604,7 +1668,7 @@ function PlanDetailReferenceWall({
   onBroken: (cardId: string) => void;
 }) {
   if (preview.cards.length === 0) {
-    return <p className="empty-message">当前 Plan 还没有参考灵感。</p>;
+    return <p className="empty-message">当前 Plan 还没有参考卡片。</p>;
   }
 
   return (
@@ -1622,6 +1686,9 @@ function PlanDetailReferenceWall({
             onBroken={() => onBroken(card.id)}
           />
           <div className="reference-card-body">
+            <span className={`card-type-badge card-type-badge--${card.card_type}`}>
+              {cardTypeLabel(card.card_type)}
+            </span>
             <strong>{card.title}</strong>
             <p>
               {platformLabel(card.source_platform)}
@@ -1672,9 +1739,12 @@ function InspirationDetailModal({
       >
         <header className="reference-modal-header">
           <div>
-            <p className="page-kicker">Inspiration Detail</p>
+            <p className="page-kicker">Card Detail</p>
             <h2 id="inspiration-detail-modal-title">{card.title}</h2>
             <p className="muted-text">
+              <span className={`card-type-badge card-type-badge--${card.card_type}`}>
+                {cardTypeLabel(card.card_type)}
+              </span>
               {platformLabel(card.source_platform)}
               {card.author_name ? ` · ${card.author_name}` : ""}
             </p>
