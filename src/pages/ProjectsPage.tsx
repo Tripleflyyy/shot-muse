@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { DragEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   createProject,
@@ -6,6 +6,7 @@ import {
   listProjects,
   Project,
   ProjectPayload,
+  reorderProjects,
   updateProject,
 } from "../services/projectApi";
 import { listShootingPlanInspirations } from "../services/planInspirationApi";
@@ -79,6 +80,8 @@ export default function ProjectsPage() {
   const [referenceCounts, setReferenceCounts] = useState<Record<string, number>>({});
   const [keyword, setKeyword] = useState("");
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
+  const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null);
+  const [draggingPlan, setDraggingPlan] = useState<{ projectId: string; planId: string } | null>(null);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm);
   const [planForm, setPlanForm] = useState<PlanFormState>(emptyPlanForm);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -306,6 +309,67 @@ export default function ProjectsPage() {
     }
   }
 
+  async function dropProject(targetProjectId: string) {
+    if (!draggingProjectId || draggingProjectId === targetProjectId) {
+      setDraggingProjectId(null);
+      return;
+    }
+
+    const ids = projects.map((project) => project.id);
+    const fromIndex = ids.indexOf(draggingProjectId);
+    const toIndex = ids.indexOf(targetProjectId);
+    if (fromIndex < 0 || toIndex < 0) {
+      setDraggingProjectId(null);
+      return;
+    }
+
+    const nextOrder = [...ids];
+    const [moved] = nextOrder.splice(fromIndex, 1);
+    nextOrder.splice(toIndex, 0, moved);
+    setProjects((current) =>
+      nextOrder
+        .map((id) => current.find((project) => project.id === id))
+        .filter((project): project is Project => Boolean(project)),
+    );
+    setDraggingProjectId(null);
+
+    try {
+      await reorderProjects(nextOrder);
+      await loadWorkspace();
+    } catch (error) {
+      alert(toErrorMessage(error, "调整 Project 顺序失败"));
+      await loadWorkspace();
+    }
+  }
+
+  async function dropPlan(targetProjectId: string, targetPlanId: string) {
+    if (!draggingPlan || draggingPlan.projectId !== targetProjectId || draggingPlan.planId === targetPlanId) {
+      setDraggingPlan(null);
+      return;
+    }
+
+    const projectPlans = (plansByProject[targetProjectId] ?? []).map((plan) => plan.id);
+    const fromIndex = projectPlans.indexOf(draggingPlan.planId);
+    const toIndex = projectPlans.indexOf(targetPlanId);
+    if (fromIndex < 0 || toIndex < 0) {
+      setDraggingPlan(null);
+      return;
+    }
+
+    const nextOrder = [...projectPlans];
+    const [moved] = nextOrder.splice(fromIndex, 1);
+    nextOrder.splice(toIndex, 0, moved);
+    setDraggingPlan(null);
+
+    try {
+      await reorderShootingPlans(targetProjectId, nextOrder);
+      await loadWorkspace();
+    } catch (error) {
+      alert(toErrorMessage(error, "调整 Plan 顺序失败"));
+      await loadWorkspace();
+    }
+  }
+
   function requestDeleteProject(project: Project) {
     setPendingDeleteProject(project);
   }
@@ -392,7 +456,20 @@ export default function ProjectsPage() {
               const isExpanded = expandedProjectIds.has(project.id);
 
               return (
-                <section className="project-directory-section" key={project.id}>
+                <section
+                  className={`project-directory-section ${
+                    draggingProjectId === project.id ? "is-dragging" : ""
+                  }`}
+                  key={project.id}
+                  draggable
+                  onDragStart={(event) => {
+                    setDraggingProjectId(project.id);
+                    event.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => void dropProject(project.id)}
+                  onDragEnd={() => setDraggingProjectId(null)}
+                >
                   <header className="project-directory-header">
                     <button
                       className="project-toggle-button"
@@ -414,9 +491,27 @@ export default function ProjectsPage() {
                     </div>
                     <span className="project-plan-count">{projectPlans.length} Plans</span>
                     <div className="project-directory-actions">
-                      <button type="button" onClick={() => openEditProject(project)}>编辑</button>
-                      <button className="danger-button" type="button" onClick={() => requestDeleteProject(project)}>
-                        删除
+                      <button
+                        className="icon-button"
+                        type="button"
+                        title="编辑 Project"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEditProject(project);
+                        }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="icon-button icon-button--danger"
+                        type="button"
+                        title="删除 Project"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          requestDeleteProject(project);
+                        }}
+                      >
+                        ×
                       </button>
                     </div>
                   </header>
@@ -438,40 +533,39 @@ export default function ProjectsPage() {
 
                   {isExpanded && (
                     <div className="project-directory-body">
-                      <div className="project-body-toolbar">
-                        <p className="muted-text">
-                          Plan 是 Project 下的具体拍摄主题、场景、地点或子任务。
-                        </p>
-                        <button className="primary-button" type="button" onClick={() => openNewPlanModal(project)}>
-                          + New Plan
-                        </button>
-                      </div>
+                      <p className="muted-text">
+                        Plan 是 Project 下的具体拍摄主题、场景、地点或子任务。
+                      </p>
 
-                      {projectPlans.length === 0 ? (
-                        <div className="project-empty-plans">
-                          <p>这个 Project 还没有 Plan。</p>
-                          <button type="button" onClick={() => openNewPlanModal(project)}>
-                            创建第一个 Plan
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="project-plan-card-grid">
-                          {projectPlans.map((plan, index) => (
+                      <div className="project-plan-card-grid">
+                        {projectPlans.map((plan, index) => (
                             <PlanCard
                               key={plan.id}
                               plan={plan}
                               referenceCount={referenceCounts[plan.id] ?? 0}
                               canMoveUp={index > 0}
                               canMoveDown={index < projectPlans.length - 1}
+                              isDragging={draggingPlan?.planId === plan.id}
                               onOpen={() => setSelectedPlan(plan)}
                               onEdit={() => openEditPlan(plan)}
                               onStatusChange={(status) => void updatePlanStatus(plan, status)}
                               onMoveUp={() => void movePlan(project.id, plan.id, -1)}
                               onMoveDown={() => void movePlan(project.id, plan.id, 1)}
+                              onDragStart={() => setDraggingPlan({ projectId: project.id, planId: plan.id })}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => void dropPlan(project.id, plan.id)}
+                              onDragEnd={() => setDraggingPlan(null)}
                             />
-                          ))}
-                        </div>
-                      )}
+                        ))}
+                        <button
+                          className="project-plan-add-card"
+                          type="button"
+                          onClick={() => openNewPlanModal(project)}
+                        >
+                          <span>＋</span>
+                          <strong>New Plan</strong>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </section>
@@ -528,39 +622,61 @@ function PlanCard({
   referenceCount,
   canMoveUp,
   canMoveDown,
+  isDragging,
   onOpen,
   onEdit,
   onStatusChange,
   onMoveUp,
   onMoveDown,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: {
   plan: ShootingPlan;
   referenceCount: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  isDragging: boolean;
   onOpen: () => void;
   onEdit: () => void;
   onStatusChange: (status: ShootingPlanStatus) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onDragStart: () => void;
+  onDragOver: (event: DragEvent<HTMLElement>) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }) {
   return (
-    <article className="project-plan-card">
-      <div className="project-plan-card-header">
+    <article
+      className={`entity-card shooting-plan-card shooting-plan-card--compact project-plan-workspace-card ${
+        isDragging ? "is-dragging" : ""
+      }`}
+      draggable
+      onClick={onOpen}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
+      <div className="plan-card-content">
+      <div className="entity-card-header">
         <div>
-          <h3>{plan.title}</h3>
-          <p>{plan.shooting_theme || "未填写风格主题"}</p>
+          <h2>{plan.title}</h2>
+          <p className="plan-project-name">Project · {plan.project_name ?? "未知项目"}</p>
         </div>
         <span className={`status-pill status-pill--${plan.status}`}>
           {statusLabel(plan.status)}
         </span>
       </div>
-      <div className="project-plan-card-lines">
+      <div className="plan-compact-lines">
+        <p><span>风格主题</span>{plan.shooting_theme || "-"}</p>
         <p><span>器材</span>{plan.gear_list || "-"}</p>
-        <p><span>摘要</span>{plan.notes || "-"}</p>
-        <p><span>参考卡片</span>{referenceCount} 张</p>
+        <p><span>策划概述</span>{plan.notes || "-"}</p>
       </div>
-      <div className="project-plan-card-controls">
+      <p className="plan-reference-empty">{referenceCount} 张参考卡片</p>
+      <div className="project-plan-card-controls" onClick={(event) => event.stopPropagation()}>
         <select
           value={plan.status}
           onChange={(event) => onStatusChange(event.target.value as ShootingPlanStatus)}
@@ -575,9 +691,9 @@ function PlanCard({
         <button type="button" disabled={!canMoveUp} onClick={onMoveUp}>上移</button>
         <button type="button" disabled={!canMoveDown} onClick={onMoveDown}>下移</button>
       </div>
-      <div className="row-actions">
-        <button type="button" onClick={onOpen}>查看详情</button>
+      <div className="row-actions" onClick={(event) => event.stopPropagation()}>
         <button type="button" onClick={onEdit}>编辑</button>
+      </div>
       </div>
     </article>
   );

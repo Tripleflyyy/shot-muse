@@ -497,6 +497,12 @@ a {
   background: #fffaf3;
 }
 
+.project-directory-section.is-dragging,
+.project-plan-workspace-card.is-dragging {
+  opacity: 0.52;
+  transform: scale(0.985);
+}
+
 .project-directory-header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -554,6 +560,35 @@ a {
   justify-content: flex-end;
 }
 
+.icon-button {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(120, 94, 58, 0.2);
+  border-radius: 999px;
+  color: #4a3f34;
+  background: rgba(255, 252, 247, 0.9);
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  border-color: #d9a94c;
+  background: #fff4d7;
+}
+
+.icon-button--danger {
+  color: #9b322d;
+}
+
+.icon-button--danger:hover {
+  border-color: #f0b4b4;
+  background: #fff5f5;
+}
+
 .project-directory-body {
   display: grid;
   gap: 14px;
@@ -594,10 +629,18 @@ a {
 
 .project-plan-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
   min-width: 0;
   max-width: 100%;
+}
+
+.project-plan-workspace-card {
+  min-height: 280px;
+}
+
+.project-plan-workspace-card[draggable="true"] {
+  user-select: none;
 }
 
 .project-plan-card {
@@ -662,6 +705,44 @@ a {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   min-width: 0;
+}
+
+.project-plan-card-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.project-plan-add-card {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 280px;
+  min-width: 0;
+  border: 2px dashed rgba(149, 121, 78, 0.38);
+  border-radius: 8px;
+  color: #7a5d2b;
+  background: rgba(255, 252, 247, 0.72);
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    transform 0.16s ease;
+}
+
+.project-plan-add-card:hover {
+  transform: translateY(-2px);
+  border-color: #d9a94c;
+  background: #fff7e6;
+}
+
+.project-plan-add-card span {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.project-plan-add-card strong {
+  font-size: 14px;
 }
 
 .project-plan-card-controls select {

@@ -109,9 +109,10 @@ Project 示例：
 - Project 下的 Plan 列表
 - Project 地点、时间和备注
 - Project 可展开 / 收起，像目录一样展示其下 Plans
-- 每个 Project 下可直接新建 Plan，并自动归属当前 Project
+- 每个 Project 下通过虚线新增卡直接新建 Plan，并自动归属当前 Project
 - Project 下的 Plan 可查看详情、编辑、快捷修改状态
-- 同一 Project 下可通过上移 / 下移调整 Plan 顺序
+- Project 下 Plan 卡片视觉与 Shooting Plans 页面保持一致
+- 同一 Project 下可拖拽调整 Plan 顺序，Project section 也可拖拽调整顺序
 - 后续可提供 Project 级资料汇总
 
 说明：

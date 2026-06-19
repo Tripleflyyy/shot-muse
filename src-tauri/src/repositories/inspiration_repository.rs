@@ -548,6 +548,7 @@ mod tests {
                 location: None,
                 planned_shooting_time: None,
                 notes: None,
+                sort_order: None,
             },
         )
         .expect("create project")

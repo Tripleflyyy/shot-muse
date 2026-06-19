@@ -8,6 +8,7 @@ export type Project = {
   location: string | null;
   planned_shooting_time: string | null;
   notes: string | null;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -19,6 +20,7 @@ export type ProjectPayload = {
   location?: string | null;
   planned_shooting_time?: string | null;
   notes?: string | null;
+  sort_order?: number | null;
 };
 
 export async function createProject(payload: ProjectPayload): Promise<Project> {
@@ -50,4 +52,8 @@ export async function getProject(id: string): Promise<Project> {
 
 export async function listProjects(keyword?: string): Promise<Project[]> {
   return invoke<Project[]>("list_projects", { keyword });
+}
+
+export async function reorderProjects(orderedProjectIds: string[]): Promise<Project[]> {
+  return invoke<Project[]>("reorder_projects", { orderedProjectIds });
 }

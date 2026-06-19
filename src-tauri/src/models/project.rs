@@ -9,6 +9,7 @@ pub struct Project {
     pub location: Option<String>,
     pub planned_shooting_time: Option<String>,
     pub notes: Option<String>,
+    pub sort_order: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -21,4 +22,5 @@ pub struct ProjectPayload {
     pub location: Option<String>,
     pub planned_shooting_time: Option<String>,
     pub notes: Option<String>,
+    pub sort_order: Option<i64>,
 }

@@ -68,12 +68,13 @@ CREATE TABLE IF NOT EXISTS projects (
   location TEXT,
   planned_shooting_time TEXT,
   notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 ```
 
-说明：P0-15 不新增 Project 统计字段。Projects 页面中的 Plan 数量、完成数量、状态分布和参考卡片数量由前端基于 `shooting_plans` 与 `shooting_plan_inspirations` 聚合得到。
+说明：`sort_order` 用于 Projects 页面中 Project section 的拖拽排序；查询默认按 `sort_order ASC, updated_at DESC`。P0-15.2 不新增 Project 统计字段。
 
 ## 3. inspiration_cards 表
 

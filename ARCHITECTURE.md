@@ -67,7 +67,7 @@ Plan References
 
 依赖的 Tauri commands：create_project、update_project、delete_project、get_project、list_projects、list_shooting_plans、list_shooting_plan_inspirations
 
-当前 Projects 页面以可展开 Project 目录呈现：每个 Project section 展开后显示其下 Plan 卡片，支持在该 Project 下新建 Plan、查看 / 编辑 Plan、快捷修改状态以及通过 `shooting_plans.sort_order` 上移 / 下移排序。
+当前 Projects 页面以可展开 Project 目录呈现：每个 Project section 展开后显示与 Shooting Plans 页面一致的 Plan 卡片，支持通过虚线新增卡新建 Plan、查看 / 编辑 Plan、快捷修改状态以及通过 `shooting_plans.sort_order` 拖拽排序。Project section 自身通过 `projects.sort_order` 拖拽排序。
 
 示例：新疆一个月旅行拍摄、西安城市人像创作、咖啡馆人像系列、某次商业拍摄任务。
 
