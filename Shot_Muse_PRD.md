@@ -108,12 +108,15 @@ Project 示例：
 - 项目基本信息
 - Project 下的 Plan 列表
 - Project 进度、地点、时间和备注
+- Plan 数量、完成数量、草稿 / 准备 / 归档分布
+- Plan 关联参考卡片总数
+- 快速新建 Plan，并自动归属当前 Project
 - 后续可提供 Project 级资料汇总
 
 说明：
 
-- Project 是组织容器，不是直接承载所有参考卡片的主要层级。
-- Plan 必须属于 Project。
+- Project 是一次完整拍摄任务、旅行、商拍或创作周期的组织入口。
+- Plan 必须属于 Project，是 Project 下的具体拍摄主题、场景、地点或子任务。
 - 参考灵感 / 参考技巧主要关联到 Plan。
 
 ## 6. Card Library 卡片库

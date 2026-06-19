@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 ```
 
+说明：P0-15 不新增 Project 统计字段。Projects 页面中的 Plan 数量、完成数量、状态分布和参考卡片数量由前端基于 `shooting_plans` 与 `shooting_plan_inspirations` 聚合得到。
+
 ## 3. inspiration_cards 表
 
 ```sql

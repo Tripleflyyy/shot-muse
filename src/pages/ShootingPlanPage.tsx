@@ -1056,7 +1056,9 @@ export default function ShootingPlanPage() {
                       <div className="entity-card-header">
                         <div>
                           <h2>{plan.title}</h2>
-                          <p>{plan.project_name ?? "未知项目"}</p>
+                          <p className="plan-project-name">
+                            Project · {plan.project_name ?? "未知项目"}
+                          </p>
                         </div>
                         <span className={`status-pill status-pill--${plan.status}`}>
                           {statusLabel(plan.status)}

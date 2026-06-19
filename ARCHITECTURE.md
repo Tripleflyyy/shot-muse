@@ -59,13 +59,15 @@ Plan References
 
 ### Projects 项目模块
 
-功能职责：创建、编辑、删除 Project。Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项目，是 Plan 的组织容器，不是直接承载所有参考卡片的主要层级。
+功能职责：创建、编辑、删除 Project。Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项目，是 Plan 的组织入口，不是直接承载所有参考卡片的主要层级。
 
 主要页面：ProjectsPage、ProjectDetailPage
 
-依赖的数据表：projects、shooting_plans
+依赖的数据表：projects、shooting_plans、shooting_plan_inspirations
 
-依赖的 Tauri commands：create_project、update_project、delete_project、get_project、list_projects、list_shooting_plans
+依赖的 Tauri commands：create_project、update_project、delete_project、get_project、list_projects、list_shooting_plans、list_shooting_plan_inspirations
+
+当前 Projects 页面以卡片墙和详情弹窗呈现 Project，前端基于现有 `shooting_plans` 与 `shooting_plan_inspirations` 聚合 Plan 数量、完成数量、状态分布和参考卡片数量，不新增统计表。
 
 示例：新疆一个月旅行拍摄、西安城市人像创作、咖啡馆人像系列、某次商业拍摄任务。
 
