@@ -220,10 +220,10 @@ export default function TagsPage() {
   return (
     <section className="page-frame">
       <header className="page-header">
-        <p className="page-kicker">Tags</p>
-        <h1 className="page-title">Tags</h1>
+        <p className="page-kicker">TAGS</p>
+        <h1 className="page-title">标签</h1>
         <p className="page-copy">
-          管理系统预设标签和自定义标签。预设标签只展示，不可删除或改分类。
+          Manage advanced tag categories, colors, and custom labels.
         </p>
       </header>
 

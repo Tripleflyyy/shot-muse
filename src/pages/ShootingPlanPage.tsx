@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useSearchParams } from "react-router-dom";
 
 import { CardType, InspirationCard, SourcePlatform } from "../services/inspirationApi";
 import {
@@ -114,6 +115,7 @@ const referenceCardTypeFilters: Array<{
 ];
 
 export default function ShootingPlanPage() {
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [plans, setPlans] = useState<ShootingPlan[]>([]);
   const [form, setForm] = useState<ShootingPlanFormState>(emptyForm);
@@ -157,6 +159,8 @@ export default function ShootingPlanPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isReferenceLoading, setIsReferenceLoading] = useState(false);
+  const [openedPlanParam, setOpenedPlanParam] = useState("");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const isEditing = editingPlanId !== null;
   const activeReferencePlan = useMemo(
@@ -177,6 +181,21 @@ export default function ShootingPlanPage() {
     // Load once on page mount; filters are applied explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const planId = searchParams.get("planId");
+    if (!planId || openedPlanParam === planId || plans.length === 0) {
+      return;
+    }
+
+    const targetPlan = plans.find((plan) => plan.id === planId);
+    if (!targetPlan) {
+      return;
+    }
+
+    openPlanDetail(targetPlan);
+    setOpenedPlanParam(planId);
+  }, [openedPlanParam, plans, searchParams]);
 
   async function loadInitialData() {
     setIsLoading(true);
@@ -1004,87 +1023,103 @@ export default function ShootingPlanPage() {
     <section className="page-frame">
       <header className="page-header plans-page-header">
         <div className="plans-page-header-main">
-          <p className="page-kicker">Plans</p>
-          <h1 className="page-title">Shooting Plans</h1>
+          <p className="page-kicker">SHOOTING PLANS</p>
+          <h1 className="page-title">拍摄计划</h1>
           <p className="page-copy">
-            为已有摄影项目创建可执行拍摄计划，整理器材、场景、动作、构图、光线和后期方向。
+            Create executable shooting plans with references, gear, style, and notes.
           </p>
         </div>
-        <div className="plans-page-actions">
-          <button className="primary-button new-plan-button" type="button" onClick={openNewPlanModal}>
-            + New Plan
+        <div className="plans-page-actions page-icon-actions">
+          <button
+            aria-expanded={isFilterOpen}
+            aria-label={isFilterOpen ? "关闭检索" : "打开检索"}
+            className={`icon-action-button ${isFilterOpen ? "active" : ""}`}
+            type="button"
+            onClick={() => setIsFilterOpen((current) => !current)}
+          >
+            <span className="icon-action-symbol">⌕</span>
+          </button>
+          <button
+            aria-label="新建拍摄计划"
+            className="icon-action-button icon-action-button--primary"
+            type="button"
+            onClick={openNewPlanModal}
+          >
+            <span className="icon-action-symbol">+</span>
           </button>
         </div>
       </header>
 
       <section className="plans-workspace">
-        <div className="plans-toolbar">
-          <form className="search-filter-panel plans-filter-panel" onSubmit={handleFilter}>
-            <div className="filter-panel-title">
-              <strong>筛选拍摄计划</strong>
-              <span>{plans.length} 个匹配计划</span>
-            </div>
-            <div className="search-filter-bar shooting-plan-filter-bar">
-              <input
-                className="search-filter-input"
-                value={filters.keyword}
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    keyword: event.target.value,
-                  }))
-                }
-                placeholder="搜索标题 / 主题 / 器材 / 策划概述..."
-              />
-              <select
-                className="search-filter-select"
-                value={filters.project_id}
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    project_id: event.target.value,
-                  }))
-                }
-              >
-                <option value="">全部项目</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="search-filter-select"
-                value={filters.status}
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    status: event.target.value as "" | ShootingPlanStatus,
-                  }))
-                }
-              >
-                <option value="">全部状态</option>
-                {statuses.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
-              <div className="search-filter-actions">
-                <button className="search-filter-button" type="submit">
-                  筛选
-                </button>
-                <button
-                  className="search-filter-reset"
-                  type="button"
-                  onClick={() => void clearFilters()}
-                >
-                  清空
-                </button>
+        {isFilterOpen && (
+          <div className="plans-toolbar">
+            <form className="search-filter-panel plans-filter-panel" onSubmit={handleFilter}>
+              <div className="filter-panel-title">
+                <strong>筛选拍摄计划</strong>
+                <span>{plans.length} 个匹配计划</span>
               </div>
-            </div>
-          </form>
-        </div>
+              <div className="search-filter-bar shooting-plan-filter-bar">
+                <input
+                  className="search-filter-input"
+                  value={filters.keyword}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      keyword: event.target.value,
+                    }))
+                  }
+                  placeholder="搜索标题 / 主题 / 器材 / 策划概述..."
+                />
+                <select
+                  className="search-filter-select"
+                  value={filters.project_id}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      project_id: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">全部项目</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="search-filter-select"
+                  value={filters.status}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      status: event.target.value as "" | ShootingPlanStatus,
+                    }))
+                  }
+                >
+                  <option value="">全部状态</option>
+                  {statuses.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="search-filter-actions">
+                  <button className="search-filter-button" type="submit">
+                    筛选
+                  </button>
+                  <button
+                    className="search-filter-reset"
+                    type="button"
+                    onClick={() => void clearFilters()}
+                  >
+                    清空
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
 
         {isLoading ? (
           <p className="muted-text">正在加载拍摄计划...</p>
