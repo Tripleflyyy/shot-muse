@@ -47,7 +47,7 @@
 
 3. Plan References
 
-当前 `shooting_plan_inspirations` 支持 Plan 关联灵感卡。Card Library 统一后，后续可演进为 `shooting_plan_reference_cards` 或类似结构，以支持 Plan 同时关联灵感卡和技巧卡。
+当前 `shooting_plan_inspirations` 继续作为 Plan 与统一卡片库的关联表。表名沿用历史命名，但 `inspiration_card_id` 指向的是 `inspiration_cards` 中的统一卡片记录，具体通过 `card_type` 区分灵感卡和技巧卡。
 
 约束：
 
@@ -254,6 +254,8 @@ CREATE TABLE IF NOT EXISTS shooting_plan_inspirations (
   FOREIGN KEY (inspiration_card_id) REFERENCES inspiration_cards(id) ON DELETE CASCADE
 );
 ```
+
+说明：P0-14 不新增 `shooting_plan_reference_cards`，也不重命名该表。产品层统一称为“参考卡片”，移除关联只删除本表记录，不删除原卡片。
 
 ## 10. shooting_plan_techniques 表
 
