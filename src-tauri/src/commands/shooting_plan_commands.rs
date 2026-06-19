@@ -142,6 +142,30 @@ pub fn update_shooting_plan_cover(
         .map_err(command_error)
 }
 
+#[tauri::command]
+pub fn reorder_shooting_plans(
+    state: State<'_, AppState>,
+    project_id: String,
+    ordered_plan_ids: Vec<String>,
+) -> Result<Vec<ShootingPlan>, String> {
+    validate_id(&project_id, "关联项目不能为空")?;
+
+    if ordered_plan_ids.iter().any(|id| id.trim().is_empty()) {
+        return Err("拍摄计划排序参数不合法".to_string());
+    }
+
+    state
+        .with_connection(|connection| {
+            ensure_project_exists(connection, &project_id)?;
+            shooting_plan_repository::reorder_shooting_plans(
+                connection,
+                &project_id,
+                &ordered_plan_ids,
+            )
+        })
+        .map_err(command_error)
+}
+
 fn validate_payload_shape(payload: &ShootingPlanPayload) -> Result<(), String> {
     if payload.project_id.trim().is_empty() {
         return Err("关联项目不能为空".to_string());
@@ -203,6 +227,7 @@ fn normalize_payload(payload: ShootingPlanPayload) -> ShootingPlanPayload {
         post_style: normalize_optional_string(payload.post_style),
         technique_notes: normalize_optional_string(payload.technique_notes),
         notes: normalize_optional_string(payload.notes),
+        sort_order: payload.sort_order,
         status: normalize_optional_string(payload.status).or_else(|| Some("draft".to_string())),
     }
 }
@@ -270,6 +295,7 @@ mod tests {
             post_style: None,
             technique_notes: None,
             notes: None,
+            sort_order: None,
             status: status.map(ToOwned::to_owned),
         }
     }

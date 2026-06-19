@@ -107,13 +107,18 @@ Project 示例：
 
 - 项目基本信息
 - Project 下的 Plan 列表
-- Project 进度、地点、时间和备注
+- Project 地点、时间和备注
+- Project 可展开 / 收起，像目录一样展示其下 Plans
+- 每个 Project 下通过虚线新增卡直接新建 Plan，并自动归属当前 Project
+- Project 下的 Plan 可查看详情、编辑、快捷修改状态
+- Project 下 Plan 卡片视觉与 Shooting Plans 页面保持一致
+- 同一 Project 下可拖拽调整 Plan 顺序，Project section 也可拖拽调整顺序
 - 后续可提供 Project 级资料汇总
 
 说明：
 
-- Project 是组织容器，不是直接承载所有参考卡片的主要层级。
-- Plan 必须属于 Project。
+- Project 是一次完整拍摄任务、旅行、商拍或创作周期的组织入口。
+- Plan 必须属于 Project，是 Project 下的具体拍摄主题、场景、地点或子任务。
 - 参考灵感 / 参考技巧主要关联到 Plan。
 
 ## 6. Card Library 卡片库

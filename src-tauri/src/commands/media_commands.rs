@@ -462,6 +462,7 @@ mod tests {
                         location: None,
                         planned_shooting_time: None,
                         notes: None,
+                        sort_order: None,
                     },
                 )?;
 
@@ -479,6 +480,7 @@ mod tests {
                         post_style: None,
                         technique_notes: None,
                         notes: None,
+                        sort_order: None,
                         status: Some("draft".into()),
                     },
                 )

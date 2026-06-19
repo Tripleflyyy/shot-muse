@@ -68,6 +68,22 @@ pub fn list_projects(
         .map_err(database_error)
 }
 
+#[tauri::command]
+pub fn reorder_projects(
+    state: State<'_, AppState>,
+    ordered_project_ids: Vec<String>,
+) -> Result<Vec<Project>, String> {
+    if ordered_project_ids.iter().any(|id| id.trim().is_empty()) {
+        return Err("项目排序参数不合法".to_string());
+    }
+
+    state
+        .with_connection(|connection| {
+            project_repository::reorder_projects(connection, &ordered_project_ids)
+        })
+        .map_err(database_error)
+}
+
 fn validate_project_payload(payload: &ProjectPayload) -> Result<(), String> {
     if payload.name.trim().is_empty() {
         return Err("项目名称不能为空".to_string());

@@ -17,6 +17,7 @@ export type ShootingPlan = {
   technique_notes: string | null;
   notes: string | null;
   cover_media_asset_id: string | null;
+  sort_order: number;
   status: ShootingPlanStatus;
   created_at: string;
   updated_at: string;
@@ -34,6 +35,7 @@ export type ShootingPlanPayload = {
   post_style?: string | null;
   technique_notes?: string | null;
   notes?: string | null;
+  sort_order?: number | null;
   status?: ShootingPlanStatus | null;
 };
 
@@ -93,5 +95,15 @@ export async function listShootingPlansByProject(
 ): Promise<ShootingPlan[]> {
   return invoke<ShootingPlan[]>("list_shooting_plans_by_project", {
     projectId,
+  });
+}
+
+export async function reorderShootingPlans(
+  projectId: string,
+  orderedPlanIds: string[],
+): Promise<ShootingPlan[]> {
+  return invoke<ShootingPlan[]>("reorder_shooting_plans", {
+    projectId,
+    orderedPlanIds,
   });
 }

@@ -21,6 +21,7 @@ import {
   createShootingPlan,
   deleteShootingPlan,
   listShootingPlans,
+  reorderShootingPlans,
   ShootingPlan,
   ShootingPlanPayload,
   ShootingPlanStatus,
@@ -170,6 +171,7 @@ export default function ShootingPlanPage() {
     () => filterCardsByType(availableInspirations, inspirationFilters.card_type),
     [availableInspirations, inspirationFilters.card_type],
   );
+  const canSortVisiblePlans = Boolean(filters.project_id) && !filters.keyword.trim() && !filters.status;
   useEffect(() => {
     void loadInitialData();
     // Load once on page mount; filters are applied explicitly.
@@ -268,10 +270,7 @@ export default function ShootingPlanPage() {
         return plan;
       }
 
-      const updatedPlan = {
-        ...plan,
-        cover_media_asset_id: imported.id,
-      };
+      const updatedPlan = await updateShootingPlanCover(plan.id, imported.id);
       setPlanCoverMap((current) => ({
         ...current,
         [plan.id]: imported,
@@ -479,6 +478,85 @@ export default function ShootingPlanPage() {
   async function clearFilters() {
     setFilters(emptyFilters);
     await loadPlans(emptyFilters);
+  }
+
+  async function persistPlanOrder(projectId: string, nextOrder: string[]) {
+    setPlans((current) =>
+      nextOrder
+        .map((id) => current.find((plan) => plan.id === id))
+        .filter((plan): plan is ShootingPlan => Boolean(plan)),
+    );
+
+    try {
+      const reorderedPlans = await reorderShootingPlans(projectId, nextOrder);
+      setPlans(reorderedPlans);
+      setSelectedPlanForDetail((current) =>
+        current ? reorderedPlans.find((plan) => plan.id === current.id) ?? current : current,
+      );
+    } catch (error) {
+      console.error("调整 Plan 顺序失败", error);
+      alert(toErrorMessage(error, "调整 Plan 顺序失败"));
+      await loadPlans(filters);
+    }
+  }
+
+  async function movePlan(planId: string, direction: -1 | 1) {
+    if (!filters.project_id) {
+      return;
+    }
+
+    const planIds = plans.map((plan) => plan.id);
+    const currentIndex = planIds.indexOf(planId);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= planIds.length) {
+      return;
+    }
+
+    const nextOrder = [...planIds];
+    const [moved] = nextOrder.splice(currentIndex, 1);
+    nextOrder.splice(targetIndex, 0, moved);
+    await persistPlanOrder(filters.project_id, nextOrder);
+  }
+
+  async function updatePlanStatus(plan: ShootingPlan, status: ShootingPlanStatus) {
+    if (plan.status === status) {
+      return;
+    }
+
+    setPlans((current) =>
+      current.map((item) => (item.id === plan.id ? { ...item, status } : item)),
+    );
+    setSelectedPlanForDetail((current) =>
+      current?.id === plan.id ? { ...current, status } : current,
+    );
+
+    try {
+      const updatedPlan = await updateShootingPlan(plan.id, {
+        project_id: plan.project_id,
+        title: plan.title,
+        shooting_theme: plan.shooting_theme,
+        gear_list: plan.gear_list,
+        scene_list: plan.scene_list,
+        action_list: plan.action_list,
+        composition_reference: plan.composition_reference,
+        lighting_reference: plan.lighting_reference,
+        post_style: plan.post_style,
+        technique_notes: plan.technique_notes,
+        notes: plan.notes,
+        sort_order: plan.sort_order,
+        status,
+      });
+      setPlans((current) =>
+        current.map((item) => (item.id === updatedPlan.id ? updatedPlan : item)),
+      );
+      setSelectedPlanForDetail((current) =>
+        current?.id === updatedPlan.id ? updatedPlan : current,
+      );
+    } catch (error) {
+      console.error("更新 Plan 状态失败", error);
+      alert(toErrorMessage(error, "更新 Plan 状态失败"));
+      await loadPlans(filters);
+    }
   }
 
   function resetForm() {
@@ -1016,13 +1094,15 @@ export default function ShootingPlanPage() {
           </p>
         ) : (
           <div className="plan-card-wall">
-            {plans.map((plan) => {
+            {plans.map((plan, planIndex) => {
                 const preview = planReferencePreviewMap[plan.id] ?? {
                   cards: [],
                   total: 0,
                 };
                 const coverAsset = planCoverMap[plan.id] ?? planPreviewCoverMap[plan.id] ?? null;
                 const hasCover = coverAsset && !brokenPlanCoverIds.has(plan.id);
+                const canMoveUp = canSortVisiblePlans && planIndex > 0;
+                const canMoveDown = canSortVisiblePlans && planIndex < plans.length - 1;
 
                 return (
                   <article
@@ -1044,6 +1124,32 @@ export default function ShootingPlanPage() {
                       }
                     }}
                   >
+                    {canMoveUp && (
+                      <button
+                        aria-label="Plan 前移"
+                        className="plan-side-order plan-side-order-left"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void movePlan(plan.id, -1);
+                        }}
+                      >
+                        ‹
+                      </button>
+                    )}
+                    {canMoveDown && (
+                      <button
+                        aria-label="Plan 后移"
+                        className="plan-side-order plan-side-order-right"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void movePlan(plan.id, 1);
+                        }}
+                      >
+                        ›
+                      </button>
+                    )}
                     {hasCover && (
                       <img
                         alt=""
@@ -1056,11 +1162,14 @@ export default function ShootingPlanPage() {
                       <div className="entity-card-header">
                         <div>
                           <h2>{plan.title}</h2>
-                          <p>{plan.project_name ?? "未知项目"}</p>
+                          <p className="plan-project-name">
+                            Project · {plan.project_name ?? "未知项目"}
+                          </p>
                         </div>
-                        <span className={`status-pill status-pill--${plan.status}`}>
-                          {statusLabel(plan.status)}
-                        </span>
+                        <PlanStatusSelectBadge
+                          status={plan.status}
+                          onChange={(status) => void updatePlanStatus(plan, status)}
+                        />
                       </div>
                       {isReferenceModalOpen && activeReferencePlanId === plan.id && (
                         <p className="active-reference-label">正在管理参考卡片</p>
@@ -1579,6 +1688,33 @@ function filterCardsByType(
   }
 
   return cards.filter((card) => card.card_type === cardType);
+}
+
+function PlanStatusSelectBadge({
+  status,
+  onChange,
+}: {
+  status: ShootingPlanStatus;
+  onChange: (status: ShootingPlanStatus) => void;
+}) {
+  return (
+    <select
+      aria-label="设置 Plan 状态"
+      className={`plan-status-select-badge status-pill--${status}`}
+      value={status}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => {
+        event.stopPropagation();
+        onChange(event.target.value as ShootingPlanStatus);
+      }}
+    >
+      {statuses.map((item) => (
+        <option key={item.value} value={item.value}>
+          {item.label}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 function InspirationCover({

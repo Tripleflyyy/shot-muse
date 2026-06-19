@@ -13,6 +13,7 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
           location TEXT,
           planned_shooting_time TEXT,
           notes TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
@@ -75,6 +76,7 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
           technique_notes TEXT,
           notes TEXT,
           cover_media_asset_id TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
           status TEXT NOT NULL DEFAULT 'draft',
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
@@ -138,9 +140,23 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
 
     ensure_column(
         connection,
+        "projects",
+        "sort_order",
+        "ALTER TABLE projects ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    ensure_column(
+        connection,
         "shooting_plans",
         "cover_media_asset_id",
         "ALTER TABLE shooting_plans ADD COLUMN cover_media_asset_id TEXT",
+    )?;
+
+    ensure_column(
+        connection,
+        "shooting_plans",
+        "sort_order",
+        "ALTER TABLE shooting_plans ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
     )?;
 
     ensure_column(

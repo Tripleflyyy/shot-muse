@@ -134,7 +134,27 @@ Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项
 
 依赖任务：P0-11、P0-13
 
-### P0-15 Markdown 导出拍摄计划
+### P0-15 Project / Plan 关系重构与 Projects 页面升级
+
+优先级：P0
+
+任务目标：让 Project 成为一次完整拍摄任务 / 旅行 / 创作周期的目录入口，并强化 Project 下拆解多个 Plan 的工作流。
+
+输出：
+
+- Projects 页面升级为 Project 可展开目录
+- 每个 Project 展开后展示与 Shooting Plans 页面一致的 Plan 卡片
+- 支持在 Project 下通过虚线新增卡创建 Plan，并自动关联当前 Project
+- 支持在 Project 下查看 / 编辑 Plan、快捷修改状态、拖拽排序
+- `shooting_plans.sort_order` 用于同一 Project 下的 Plan 排序
+- `projects.sort_order` 用于 Project section 拖拽排序
+- Shooting Plans 页面强化所属 Project 展示
+
+验收标准：用户能在 Projects 页面像目录一样展开 Project，查看该 Project 下的 Plans，直接新建、编辑、改状态和调整 Plan 顺序。
+
+依赖任务：P0-14
+
+### P0-16 Markdown 导出拍摄计划
 
 优先级：P0
 
@@ -149,9 +169,9 @@ Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项
 
 验收标准：用户可导出可阅读、可执行、带参考资料的 Markdown 拍摄计划。
 
-依赖任务：P0-14
+依赖任务：P0-15
 
-### P0-16 全局 UI/UX polish
+### P0-17 全局 UI/UX polish
 
 优先级：P0
 

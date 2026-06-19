@@ -16,6 +16,7 @@ pub struct ShootingPlan {
     pub technique_notes: Option<String>,
     pub notes: Option<String>,
     pub cover_media_asset_id: Option<String>,
+    pub sort_order: i64,
     pub status: String,
     pub created_at: String,
     pub updated_at: String,
@@ -34,6 +35,7 @@ pub struct ShootingPlanPayload {
     pub post_style: Option<String>,
     pub technique_notes: Option<String>,
     pub notes: Option<String>,
+    pub sort_order: Option<i64>,
     pub status: Option<String>,
 }
 

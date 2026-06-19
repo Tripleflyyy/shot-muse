@@ -68,10 +68,13 @@ CREATE TABLE IF NOT EXISTS projects (
   location TEXT,
   planned_shooting_time TEXT,
   notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 ```
+
+说明：`sort_order` 用于 Projects 页面中 Project section 的拖拽排序；查询默认按 `sort_order ASC, updated_at DESC`。P0-15.2 不新增 Project 统计字段。
 
 ## 3. inspiration_cards 表
 
@@ -229,6 +232,8 @@ CREATE TABLE IF NOT EXISTS shooting_plans (
   post_style TEXT,
   technique_notes TEXT,
   notes TEXT,
+  cover_media_asset_id TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'draft',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -242,6 +247,8 @@ status 枚举建议：
 - ready
 - completed
 - archived
+
+说明：`sort_order` 用于同一 Project 下的 Plan 排序。Projects 页面上移 / 下移 Plan 时，会更新该 Project 下 Plan 的排序值；查询展示时按 `project_id ASC, sort_order ASC, created_at ASC`。
 
 ## 9. shooting_plan_inspirations 表
 
