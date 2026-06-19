@@ -154,7 +154,25 @@ Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项
 
 依赖任务：P0-14
 
-### P0-16 Markdown 导出拍摄计划
+### P0-16 Dashboard 工作台重定义
+
+优先级：P0
+
+任务目标：将 Dashboard 从占位首页改造成“创作续接首页”，帮助用户快速回到最近的 Project、Plan 和待整理卡片。
+
+输出：
+
+- Continue Working：最近 Projects、Plans、Cards
+- Active Projects：活跃项目和未完成 Plan 数量
+- Ready / Draft Plans：待继续完善或准备拍摄的计划
+- Unprocessed Cards：缺标签、缺备注、缺图片或未关联 Plan 的卡片
+- Quick Actions：进入新建 Card / Project / Plan 的主流程入口
+
+验收标准：Dashboard 不再是统计报表或欢迎页，而是打开应用后能快速续接创作工作的首页；页面无横向溢出，空状态清晰。
+
+依赖任务：P0-15
+
+### P0-17 Markdown 导出拍摄计划
 
 优先级：P0
 
@@ -169,9 +187,9 @@ Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项
 
 验收标准：用户可导出可阅读、可执行、带参考资料的 Markdown 拍摄计划。
 
-依赖任务：P0-15
+依赖任务：P0-16
 
-### P0-17 全局 UI/UX polish
+### P0-18 全局 UI/UX polish
 
 优先级：P0
 
