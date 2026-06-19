@@ -479,6 +479,7 @@ mod tests {
                         post_style: None,
                         technique_notes: None,
                         notes: None,
+                        sort_order: None,
                         status: Some("draft".into()),
                     },
                 )

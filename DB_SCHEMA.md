@@ -231,6 +231,8 @@ CREATE TABLE IF NOT EXISTS shooting_plans (
   post_style TEXT,
   technique_notes TEXT,
   notes TEXT,
+  cover_media_asset_id TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'draft',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -244,6 +246,8 @@ status 枚举建议：
 - ready
 - completed
 - archived
+
+说明：`sort_order` 用于同一 Project 下的 Plan 排序。Projects 页面上移 / 下移 Plan 时，会更新该 Project 下 Plan 的排序值；查询展示时按 `project_id ASC, sort_order ASC, created_at ASC`。
 
 ## 9. shooting_plan_inspirations 表
 

@@ -138,17 +138,18 @@ Project 是大型拍摄任务、旅行、商拍、创作周期或长期拍摄项
 
 优先级：P0
 
-任务目标：让 Project 成为一次完整拍摄任务 / 旅行 / 创作周期的组织入口，并强化 Project 下拆解多个 Plan 的工作流。
+任务目标：让 Project 成为一次完整拍摄任务 / 旅行 / 创作周期的目录入口，并强化 Project 下拆解多个 Plan 的工作流。
 
 输出：
 
-- Projects 页面升级为项目卡片墙
-- Project 详情弹窗展示项目信息、Plan 列表和统计
-- 支持从 Project 详情快速新建 Plan，并自动关联当前 Project
-- Project 卡片展示 Plan 数量、完成数量、参考卡片数量和最近更新
+- Projects 页面升级为 Project 可展开目录
+- 每个 Project 展开后展示该 Project 下的 Plan 卡片
+- 支持在 Project 下直接新建 Plan，并自动关联当前 Project
+- 支持在 Project 下查看 / 编辑 Plan、快捷修改状态、上移 / 下移排序
+- `shooting_plans.sort_order` 用于同一 Project 下的 Plan 排序
 - Shooting Plans 页面强化所属 Project 展示
 
-验收标准：用户能从 Projects 页面理解 Project 是大任务，Plan 是其下的具体拍摄主题 / 场景 / 子任务；可以从 Project 详情快速创建和查看 Plans。
+验收标准：用户能在 Projects 页面像目录一样展开 Project，查看该 Project 下的 Plans，直接新建、编辑、改状态和调整 Plan 顺序。
 
 依赖任务：P0-14
 

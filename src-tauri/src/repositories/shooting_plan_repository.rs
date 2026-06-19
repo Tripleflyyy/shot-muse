@@ -9,6 +9,9 @@ pub fn create_shooting_plan(
 ) -> rusqlite::Result<ShootingPlan> {
     let id = Uuid::new_v4().to_string();
     let status = normalize_optional_text(&payload.status).unwrap_or_else(|| "draft".to_string());
+    let sort_order = payload
+        .sort_order
+        .unwrap_or_else(|| next_sort_order(connection, payload.project_id.trim()).unwrap_or(0));
 
     connection.execute(
         "
@@ -25,6 +28,7 @@ pub fn create_shooting_plan(
           post_style,
           technique_notes,
           notes,
+          sort_order,
           status,
           created_at,
           updated_at
@@ -43,6 +47,7 @@ pub fn create_shooting_plan(
           ?11,
           ?12,
           ?13,
+          ?14,
           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
           strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         )
@@ -60,6 +65,7 @@ pub fn create_shooting_plan(
             normalize_optional_text(&payload.post_style),
             normalize_optional_text(&payload.technique_notes),
             normalize_optional_text(&payload.notes),
+            sort_order,
             status,
         ],
     )?;
@@ -88,7 +94,8 @@ pub fn update_shooting_plan(
           post_style = ?10,
           technique_notes = ?11,
           notes = ?12,
-          status = ?13,
+          sort_order = ?13,
+          status = ?14,
           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         WHERE id = ?1
         ",
@@ -105,6 +112,7 @@ pub fn update_shooting_plan(
             normalize_optional_text(&payload.post_style),
             normalize_optional_text(&payload.technique_notes),
             normalize_optional_text(&payload.notes),
+            payload.sort_order.unwrap_or_else(|| current_sort_order(connection, id).unwrap_or(0)),
             status,
         ],
     )?;
@@ -143,6 +151,7 @@ pub fn get_shooting_plan(
               shooting_plans.technique_notes,
               shooting_plans.notes,
               shooting_plans.cover_media_asset_id,
+              shooting_plans.sort_order,
               shooting_plans.status,
               shooting_plans.created_at,
               shooting_plans.updated_at
@@ -177,12 +186,13 @@ pub fn list_shooting_plans(
           shooting_plans.technique_notes,
           shooting_plans.notes,
           shooting_plans.cover_media_asset_id,
+          shooting_plans.sort_order,
           shooting_plans.status,
           shooting_plans.created_at,
           shooting_plans.updated_at
         FROM shooting_plans
         LEFT JOIN projects ON projects.id = shooting_plans.project_id
-        ORDER BY shooting_plans.updated_at DESC, shooting_plans.created_at DESC
+        ORDER BY shooting_plans.project_id ASC, shooting_plans.sort_order ASC, shooting_plans.created_at ASC
         ",
     )?;
 
@@ -271,6 +281,45 @@ pub fn update_shooting_plan_cover(
     get_shooting_plan(connection, id)
 }
 
+pub fn reorder_shooting_plans(
+    connection: &Connection,
+    project_id: &str,
+    ordered_plan_ids: &[String],
+) -> rusqlite::Result<Vec<ShootingPlan>> {
+    if ordered_plan_ids.is_empty() {
+        return list_shooting_plans_by_project(connection, project_id);
+    }
+
+    let transaction = connection.unchecked_transaction()?;
+
+    for (index, plan_id) in ordered_plan_ids.iter().enumerate() {
+        let belongs_to_project = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM shooting_plans WHERE id = ?1 AND project_id = ?2)",
+            params![plan_id, project_id],
+            |row| row.get::<_, i64>(0).map(|value| value == 1),
+        )?;
+
+        if !belongs_to_project {
+            return Err(rusqlite::Error::InvalidParameterName(
+                "图片排序参数不合法：拍摄计划不属于当前项目".to_string(),
+            ));
+        }
+
+        transaction.execute(
+            "
+            UPDATE shooting_plans
+            SET sort_order = ?2,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?1
+            ",
+            params![plan_id, index as i64],
+        )?;
+    }
+
+    transaction.commit()?;
+    list_shooting_plans_by_project(connection, project_id)
+}
+
 pub fn media_asset_exists(connection: &Connection, id: &str) -> rusqlite::Result<bool> {
     connection.query_row(
         "SELECT EXISTS(SELECT 1 FROM media_assets WHERE id = ?1)",
@@ -311,10 +360,27 @@ fn map_shooting_plan(row: &rusqlite::Row<'_>) -> rusqlite::Result<ShootingPlan> 
         technique_notes: row.get(11)?,
         notes: row.get(12)?,
         cover_media_asset_id: row.get(13)?,
-        status: row.get(14)?,
-        created_at: row.get(15)?,
-        updated_at: row.get(16)?,
+        sort_order: row.get(14)?,
+        status: row.get(15)?,
+        created_at: row.get(16)?,
+        updated_at: row.get(17)?,
     })
+}
+
+fn next_sort_order(connection: &Connection, project_id: &str) -> rusqlite::Result<i64> {
+    connection.query_row(
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM shooting_plans WHERE project_id = ?1",
+        [project_id],
+        |row| row.get(0),
+    )
+}
+
+fn current_sort_order(connection: &Connection, id: &str) -> rusqlite::Result<i64> {
+    connection.query_row(
+        "SELECT sort_order FROM shooting_plans WHERE id = ?1",
+        [id],
+        |row| row.get(0),
+    )
 }
 
 fn normalize_optional_text(value: &Option<String>) -> Option<String> {
@@ -370,6 +436,7 @@ mod tests {
             post_style: Some("低饱和暖色".into()),
             technique_notes: Some("注意曝光补偿".into()),
             notes: Some("提前踩点".into()),
+            sort_order: None,
             status: status.map(ToOwned::to_owned),
         }
     }
@@ -484,6 +551,7 @@ mod tests {
             &payload(&first_project_id, "咖啡馆人像拍摄计划", Some("ready")),
         )
         .expect("create first plan");
+        assert_eq!(first.sort_order, 0);
         let _second = create_shooting_plan(
             &connection,
             &payload(&second_project_id, "夜景街拍计划", Some("draft")),
@@ -517,6 +585,44 @@ mod tests {
         )
         .expect("list by keyword");
         assert_eq!(by_keyword.len(), 2);
+    }
+
+    #[test]
+    fn shooting_plan_sort_order_and_reorder_work() {
+        let connection = test_connection();
+        let project_id = create_project(&connection, "排序项目");
+        let other_project_id = create_project(&connection, "其他项目");
+
+        let first = create_shooting_plan(&connection, &payload(&project_id, "第一个", None))
+            .expect("create first plan");
+        let second = create_shooting_plan(&connection, &payload(&project_id, "第二个", None))
+            .expect("create second plan");
+        let third = create_shooting_plan(&connection, &payload(&project_id, "第三个", None))
+            .expect("create third plan");
+        let other = create_shooting_plan(&connection, &payload(&other_project_id, "其他", None))
+            .expect("create other plan");
+
+        assert_eq!(first.sort_order, 0);
+        assert_eq!(second.sort_order, 1);
+        assert_eq!(third.sort_order, 2);
+
+        let reordered = reorder_shooting_plans(
+            &connection,
+            &project_id,
+            &[third.id.clone(), first.id.clone(), second.id.clone()],
+        )
+        .expect("reorder plans");
+        assert_eq!(
+            reordered.iter().map(|plan| plan.id.as_str()).collect::<Vec<_>>(),
+            vec![third.id.as_str(), first.id.as_str(), second.id.as_str()]
+        );
+        assert_eq!(reordered[0].sort_order, 0);
+        assert_eq!(reordered[1].sort_order, 1);
+        assert_eq!(reordered[2].sort_order, 2);
+
+        let error = reorder_shooting_plans(&connection, &project_id, &[other.id])
+            .expect_err("plan from another project is rejected");
+        assert!(matches!(error, rusqlite::Error::InvalidParameterName(_)));
     }
 
     #[test]

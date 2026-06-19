@@ -99,6 +99,20 @@ mod tests {
             "inspiration_cards should include cover_media_asset_id"
         );
 
+        let shooting_plan_columns = connection
+            .prepare("PRAGMA table_info(shooting_plans)")
+            .expect("prepare shooting plans table info")
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("read shooting plans table info")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("collect shooting plans columns");
+        assert!(
+            shooting_plan_columns
+                .iter()
+                .any(|column| column == "sort_order"),
+            "shooting_plans should include sort_order"
+        );
+
         let media_columns = connection
             .prepare("PRAGMA table_info(media_assets)")
             .expect("prepare media table info")
