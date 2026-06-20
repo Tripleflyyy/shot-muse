@@ -1,31 +1,84 @@
 # Shot Muse
 
-Shot Muse is a local-first desktop workspace for photography inspiration, technique cards, projects, and shooting plans.
+Shot Muse is a local-first desktop workspace for photographers to collect inspiration, organize technique notes, build projects, and prepare shooting plans.
 
-It is designed around a simple creative flow:
+## Product Philosophy
 
-1. Collect inspiration and technique cards in the Card Library.
-2. Organize shooting work by Projects.
-3. Build executable Shooting Plans with reference cards, images, status, and ordering.
-4. Keep tags and local media inside the app for fast reuse.
+Shot Muse intentionally avoids a generic dashboard page. The app opens directly into Card Library because the real workflow starts from collecting and organizing visual inspiration and shooting techniques.
+
+Core workflow:
+
+1. Collect inspiration and technique cards.
+2. Organize work into Projects.
+3. Build Shooting Plans with reference cards.
+4. Manage tags and local assets.
 
 ## Current Features
 
-- Card Library for inspiration cards and technique cards
-- Inline tag search, selection, and quick tag creation while creating or editing cards
-- Local image import for cards and plans
-- Card covers, multiple images, image ordering, and hover image preview
-- Projects workspace with expandable project sections and plan cards
-- Shooting Plans with project ownership, status, cover images, reference cards, and detail modals
-- Tags management entry from Settings
-- Local SQLite persistence and local media storage
+### Card Library
 
-## Not Included Yet
+- Inspiration cards and technique cards in one unified Card Library
+- Local image import
+- Multi-image cards
+- Cover image selection
+- Image ordering and hover preview
+- Inline tag search, selection, and quick tag creation
+- Search and filtering
 
-- Markdown export
-- AI generation or analysis
-- Platform integrations, crawlers, or browser extensions
-- Cloud sync or account system
+Implementation note: the product layer says Card Library / Card / Reference Card. The data layer still keeps historical table names such as `inspiration_cards` and `shooting_plan_inspirations` to avoid high-risk migrations. `card_type = inspiration | technique` identifies the card kind.
+
+### Projects
+
+- Project-based workspace
+- Expandable project sections
+- Plans grouped by project
+- Quick Plan creation inside project context
+- Lightweight Project controls
+- Plan cards aligned with the Shooting Plans experience
+
+Cards are global reusable assets. A card is not forced to belong to one Project; Projects use cards indirectly through Plans.
+
+### Shooting Plans
+
+- Global Plan management
+- Plan cover images
+- Reference cards from Card Library
+- Plan status editing
+- Plan ordering within project context
+- Shared Plan detail experience across Projects and Shooting Plans
+
+### Tags / Settings
+
+- Tags are managed from Settings as an advanced management entry
+- Tag category and color metadata
+- Tags are used by cards and the planning workflow
+
+### Local-First Storage
+
+- SQLite database
+- Local media assets copied into the app data directory
+- Card images use `target_type = inspiration`
+- Shooting Plan images use `target_type = shooting_plan`
+- Removing a media record deletes the database row only, not the real file
+- No platform API integration
+- No crawler
+- No cloud dependency
+
+The conservative media deletion policy avoids accidentally deleting user material. Orphan-file checks and safe cleanup tools are planned for a later maintenance phase.
+
+## What Shot Muse Does Not Do Yet
+
+- No Dashboard page
+- No backup / restore / open data folder tools yet
+- No media integrity checker yet
+- No AI recommendation
+- No browser extension
+- No Douyin / Xiaohongshu API integration
+- No crawler or automatic downloading
+- No Markdown export yet
+- No cloud sync or account system
+
+If a clear practical use case appears later, a Dashboard-like entry point can be reconsidered. It is intentionally not part of the current workflow.
 
 ## Tech Stack
 
@@ -74,7 +127,7 @@ cargo test
 
 Shot Muse stores app data locally. The database is SQLite, and imported media is copied into the app data media directory instead of referencing the original user file path.
 
-Removing a media record from the app currently removes the database record only; real file cleanup is intentionally left for a later storage policy.
+Current migrations use incremental schema repair such as table creation, `PRAGMA user_version`, and idempotent column creation. That is sufficient for the current MVP, but a versioned SQL migration system or `schema_migrations` table is planned for a later maintenance phase.
 
 ## Repository Hygiene
 

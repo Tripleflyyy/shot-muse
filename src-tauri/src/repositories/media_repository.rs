@@ -96,6 +96,10 @@ pub fn list_media_assets(
     connection: &Connection,
     filters: &MediaAssetFilters,
 ) -> rusqlite::Result<Vec<MediaAsset>> {
+    let target_type = normalize_optional_text(&filters.target_type);
+    let target_id = normalize_optional_text(&filters.target_id);
+    let source_type = normalize_optional_text(&filters.source_type);
+
     let mut statement = connection.prepare(
         "
         SELECT
@@ -113,42 +117,21 @@ pub fn list_media_assets(
           created_at,
           updated_at
         FROM media_assets
+        WHERE (?1 IS NULL OR target_type = ?1)
+          AND (?2 IS NULL OR target_id = ?2)
+          AND (?3 IS NULL OR source_type = ?3)
         ORDER BY target_type ASC, target_id ASC, sort_order ASC, created_at ASC
         ",
     )?;
 
-    let rows = statement
-        .query_map([], map_media_asset)?
+    let assets = statement
+        .query_map(
+            params![target_type, target_id, source_type],
+            map_media_asset,
+        )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
-    let target_type = normalize_optional_text(&filters.target_type);
-    let target_id = normalize_optional_text(&filters.target_id);
-    let source_type = normalize_optional_text(&filters.source_type);
-
-    Ok(rows
-        .into_iter()
-        .filter(|asset| {
-            if let Some(target_type) = target_type.as_deref() {
-                if asset.target_type != target_type {
-                    return false;
-                }
-            }
-
-            if let Some(target_id) = target_id.as_deref() {
-                if asset.target_id.as_deref() != Some(target_id) {
-                    return false;
-                }
-            }
-
-            if let Some(source_type) = source_type.as_deref() {
-                if asset.source_type != source_type {
-                    return false;
-                }
-            }
-
-            true
-        })
-        .collect())
+    Ok(assets)
 }
 
 pub fn list_media_assets_by_target(
@@ -195,6 +178,17 @@ pub fn delete_media_asset(connection: &Connection, id: &str) -> rusqlite::Result
     connection.execute(
         "
         UPDATE inspiration_cards
+        SET
+          cover_media_asset_id = NULL,
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE cover_media_asset_id = ?1
+        ",
+        [id],
+    )?;
+
+    connection.execute(
+        "
+        UPDATE shooting_plans
         SET
           cover_media_asset_id = NULL,
           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
@@ -319,6 +313,12 @@ mod tests {
         let connection = test_connection();
         let created =
             create_media_asset(&connection, &payload()).expect("create media asset record");
+        let mut project_payload = payload();
+        project_payload.target_type = "project".into();
+        project_payload.target_id = Some("project-1".into());
+        project_payload.source_type = "local".into();
+        let project_asset =
+            create_media_asset(&connection, &project_payload).expect("create project media asset");
 
         assert!(!created.id.is_empty());
         assert_eq!(created.target_type, "inspiration");
@@ -332,10 +332,57 @@ mod tests {
             .expect("media asset exists");
         assert_eq!(fetched.id, created.id);
 
+        let all = list_media_assets(
+            &connection,
+            &MediaAssetFilters {
+                target_type: None,
+                target_id: None,
+                source_type: None,
+            },
+        )
+        .expect("list all media assets");
+        assert_eq!(all.len(), 2);
+
         let by_target = list_media_assets_by_target(&connection, "inspiration", "inspiration-1")
             .expect("list by target");
         assert_eq!(by_target.len(), 1);
         assert_eq!(by_target[0].id, created.id);
+
+        let by_target_type = list_media_assets(
+            &connection,
+            &MediaAssetFilters {
+                target_type: Some("project".into()),
+                target_id: None,
+                source_type: None,
+            },
+        )
+        .expect("list by target type");
+        assert_eq!(by_target_type.len(), 1);
+        assert_eq!(by_target_type[0].id, project_asset.id);
+
+        let by_target_id = list_media_assets(
+            &connection,
+            &MediaAssetFilters {
+                target_type: None,
+                target_id: Some("project-1".into()),
+                source_type: None,
+            },
+        )
+        .expect("list by target id");
+        assert_eq!(by_target_id.len(), 1);
+        assert_eq!(by_target_id[0].id, project_asset.id);
+
+        let by_source_type = list_media_assets(
+            &connection,
+            &MediaAssetFilters {
+                target_type: None,
+                target_id: None,
+                source_type: Some("local".into()),
+            },
+        )
+        .expect("list by source type");
+        assert_eq!(by_source_type.len(), 1);
+        assert_eq!(by_source_type[0].id, project_asset.id);
 
         let filtered = list_media_assets(
             &connection,
@@ -347,6 +394,7 @@ mod tests {
         )
         .expect("list filtered media assets");
         assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].id, created.id);
 
         let updated = update_media_asset_target(
             &connection,
@@ -366,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn sort_order_reorder_and_cover_cleanup_work() {
+    fn sort_order_reorder_and_cover_cleanup_work_for_cards_and_plans() {
         let connection = test_connection();
         connection
             .execute(
@@ -393,11 +441,62 @@ mod tests {
                 [],
             )
             .expect("insert card");
+        connection
+            .execute(
+                "
+                INSERT INTO projects (
+                  id,
+                  name,
+                  sort_order,
+                  created_at,
+                  updated_at
+                )
+                VALUES (
+                  'project-1',
+                  '测试项目',
+                  0,
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                )
+                ",
+                [],
+            )
+            .expect("insert project");
+        connection
+            .execute(
+                "
+                INSERT INTO shooting_plans (
+                  id,
+                  project_id,
+                  title,
+                  sort_order,
+                  status,
+                  created_at,
+                  updated_at
+                )
+                VALUES (
+                  'plan-1',
+                  'project-1',
+                  '测试计划',
+                  0,
+                  'draft',
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                )
+                ",
+                [],
+            )
+            .expect("insert shooting plan");
 
         let first = create_media_asset(&connection, &payload()).expect("create first");
         let second = create_media_asset(&connection, &payload()).expect("create second");
+        let mut plan_payload = payload();
+        plan_payload.target_type = "shooting_plan".into();
+        plan_payload.target_id = Some("plan-1".into());
+        let plan_cover = create_media_asset(&connection, &plan_payload).expect("create plan cover");
         assert_eq!(first.sort_order, 0);
         assert_eq!(second.sort_order, 1);
+        assert_eq!(plan_cover.sort_order, 0);
 
         let reordered = reorder_media_assets(
             &connection,
@@ -411,13 +510,10 @@ mod tests {
         assert_eq!(reordered[1].id, first.id);
         assert_eq!(reordered[1].sort_order, 1);
 
-        assert!(reorder_media_assets(
-            &connection,
-            "project",
-            "other-target",
-            &[second.id.clone()]
-        )
-        .is_err());
+        assert!(
+            reorder_media_assets(&connection, "project", "other-target", &[second.id.clone()])
+                .is_err()
+        );
 
         connection
             .execute(
@@ -439,6 +535,27 @@ mod tests {
             )
             .expect("read cleared cover");
         assert!(cover_media_asset_id.is_none());
+
+        connection
+            .execute(
+                "
+                UPDATE shooting_plans
+                SET cover_media_asset_id = ?1
+                WHERE id = 'plan-1'
+                ",
+                [&plan_cover.id],
+            )
+            .expect("set plan cover");
+        assert!(delete_media_asset(&connection, &plan_cover.id).expect("delete plan cover media"));
+
+        let plan_cover_media_asset_id: Option<String> = connection
+            .query_row(
+                "SELECT cover_media_asset_id FROM shooting_plans WHERE id = 'plan-1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read cleared plan cover");
+        assert!(plan_cover_media_asset_id.is_none());
     }
 
     #[test]
