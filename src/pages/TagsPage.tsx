@@ -1,5 +1,6 @@
 import { CSSProperties, FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import {
   createCustomTag,
   deleteTag,
@@ -351,28 +352,6 @@ export default function TagsPage() {
             {isSaving ? "保存中..." : editingTagId ? "保存修改" : "创建标签"}
           </button>
 
-          {pendingDeleteTag && (
-            <div className="inline-confirm">
-              <p>确定删除标签「{pendingDeleteTag.name}」吗？</p>
-              <div className="row-actions">
-                <button
-                  className="danger-button"
-                  type="button"
-                  onClick={() => void confirmDeleteTag()}
-                >
-                  确认删除
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPendingDeleteTag(null);
-                  }}
-                >
-                  取消
-                </button>
-              </div>
-            </div>
-          )}
         </form>
 
         <section className="list-panel">
@@ -488,6 +467,21 @@ export default function TagsPage() {
           )}
         </section>
       </div>
+
+      <ConfirmDialog
+        danger
+        confirmLabel="确认删除"
+        detail="删除后会从已关联的卡片中移除该标签，但不会删除卡片。"
+        message={
+          pendingDeleteTag
+            ? `将删除标签「${pendingDeleteTag.name}」。`
+            : undefined
+        }
+        open={Boolean(pendingDeleteTag)}
+        title="删除标签？"
+        onCancel={() => setPendingDeleteTag(null)}
+        onConfirm={() => void confirmDeleteTag()}
+      />
     </section>
   );
 }

@@ -5,11 +5,12 @@
 - 所有 id 使用 UUID 字符串
 - 时间字段使用 ISO 8601 字符串
 - 图片资源统一通过 media_assets 管理
-- 灵感卡片和技术卡片不直接保存 image_path
-- 一张灵感卡片可以关联多张图片
-- 一张技术卡片可以关联多张图片
-- 前端 MVP 可以只显示第一张图
-- 数据库设计支持未来多图扩展
+- Card Library 是全局卡片库，卡片不强制归属单一 Project
+- 当前产品层统一称 Card / Reference Card
+- 数据层短期保留 `inspiration_cards` 等历史表名，避免高风险重命名 migration
+- 卡片不直接保存 image_path
+- 一张卡片可以关联多张图片
+- 列表页显示封面图，详情页可浏览多图
 
 ## 1.1 当前实现与计划演进
 
@@ -27,27 +28,22 @@
 
 1. Card Library 统一卡片库
 
-当前 P0-11 实现选择低风险路径：继续沿用 `inspiration_cards` 表名，并在现有卡片表上增加 `card_type` 字段。完整 `reference_cards` 重构仍是后续演进，不是当前阶段。
+当前实现选择低风险路径：继续沿用 `inspiration_cards` 历史表名，并在现有卡片表上增加 `card_type` 字段。完整 `reference_cards` 重构或表重命名 migration 属于后续 P1 技术债，不是当前 P0 阶段。
 
 `card_type` 当前允许值：
 
 - inspiration
 - technique
 
-说明：统一卡片库用于支持“全部 / 灵感 / 技巧”视图，让图片、标签、来源、描述、搜索和 Plan 引用逻辑复用。
+说明：统一卡片库用于支持“全部 / 灵感 / 技巧”视图，让图片、标签、来源、描述、搜索和 Plan 引用逻辑复用。技巧卡是 `card_type = technique` 的卡片，不启用独立的第二套技巧卡主流程。
 
 2. 多图卡片
 
-当前 `media_assets` 已支持同一 `target_type + target_id` 关联多张图片。后续可增加以下能力：
-
-- `cover_media_asset_id`：指定封面图
-- `sort_order`：支持图片排序
-
-说明：列表页只显示封面图；卡片详情 / 编辑页支持多图翻动，默认第一张图片作为封面。
+当前 `media_assets` 已支持同一 `target_type + target_id` 关联多张图片，并通过 `sort_order` 支持图片排序。`inspiration_cards.cover_media_asset_id` 指定卡片封面；为空时回退到排序后的第一张图片。
 
 3. Plan References
 
-当前 `shooting_plan_inspirations` 继续作为 Plan 与统一卡片库的关联表。表名沿用历史命名，但 `inspiration_card_id` 指向的是 `inspiration_cards` 中的统一卡片记录，具体通过 `card_type` 区分灵感卡和技巧卡。
+当前 `shooting_plan_inspirations` 继续作为 Plan 与统一卡片库的关联表。表名沿用历史命名，但 `inspiration_card_id` 指向的是 `inspiration_cards` 中的统一卡片记录，具体通过 `card_type` 区分灵感卡和技巧卡。产品层统一称为 Plan 引用 Reference Card。
 
 约束：
 
@@ -74,7 +70,7 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 ```
 
-说明：`sort_order` 用于 Projects 页面中 Project section 的拖拽排序；查询默认按 `sort_order ASC, updated_at DESC`。P0-15.2 不新增 Project 统计字段。
+说明：`sort_order` 用于 Projects 页面中 Project section 的轻量排序；查询默认按 `sort_order ASC, updated_at DESC`。Project 当前不使用拖拽作为主要排序方式。
 
 ## 3. inspiration_cards 表
 
@@ -112,9 +108,13 @@ card_type 当前允许值：
 
 说明：历史卡片默认 `inspiration`。P0-11 后，卡片库页面通过该字段提供“全部 / 灵感 / 技巧”视图；当前仍不重命名 `inspiration_cards`。
 
-`cover_media_asset_id` 可为空。为空时，卡片墙使用该卡片按 `sort_order ASC, created_at ASC` 排序后的第一张图片作为封面；非空时业务层校验对应 media asset 属于当前卡片。
+`project_id` 是历史 / 可选关联字段。当前主流程不依赖它表达卡片归属，Card 默认是全局素材，可被多个 Plan / Project 复用。
 
-## 4. technique_cards 表
+`cover_media_asset_id` 可为空。为空时，卡片墙使用该卡片按 `sort_order ASC, created_at ASC` 排序后的第一张图片作为封面；非空时业务层校验对应 media asset 属于当前卡片。删除对应 media_assets 记录时，业务层会清空该字段。
+
+## 4. technique_cards 表（历史设计 / 当前不参与主流程）
+
+当前真实实现中，技巧卡并入 `inspiration_cards`，通过 `card_type = technique` 区分。以下独立 `technique_cards` 表是早期设计记录，当前主流程不启用，也不应被理解为第二套技巧卡系统。
 
 ```sql
 CREATE TABLE IF NOT EXISTS technique_cards (
@@ -204,7 +204,9 @@ CREATE TABLE IF NOT EXISTS inspiration_card_tags (
 );
 ```
 
-## 7. technique_card_tags 表
+## 7. technique_card_tags 表（历史设计 / 当前不参与主流程）
+
+当前标签关系复用 `inspiration_card_tags`，并通过 `inspiration_cards.card_type` 区分灵感卡 / 技巧卡。以下独立技巧卡标签关系表是早期设计记录。
 
 ```sql
 CREATE TABLE IF NOT EXISTS technique_card_tags (
@@ -248,7 +250,9 @@ status 枚举建议：
 - completed
 - archived
 
-说明：`sort_order` 用于同一 Project 下的 Plan 排序。Projects 页面上移 / 下移 Plan 时，会更新该 Project 下 Plan 的排序值；查询展示时按 `project_id ASC, sort_order ASC, created_at ASC`。
+说明：`sort_order` 用于同一 Project 下的 Plan 排序。Projects / Shooting Plans 页面通过卡片侧边排序箭头更新该 Project 下 Plan 的排序值；查询展示时按 `project_id ASC, sort_order ASC, created_at ASC`。
+
+`cover_media_asset_id` 可为空。删除对应 media_assets 记录时，业务层会清空该字段，避免 Plan 卡片封面出现 dangling cover id。
 
 ## 9. shooting_plan_inspirations 表
 
@@ -264,7 +268,9 @@ CREATE TABLE IF NOT EXISTS shooting_plan_inspirations (
 
 说明：P0-14 不新增 `shooting_plan_reference_cards`，也不重命名该表。产品层统一称为“参考卡片”，移除关联只删除本表记录，不删除原卡片。
 
-## 10. shooting_plan_techniques 表
+## 10. shooting_plan_techniques 表（历史设计 / 当前不参与主流程）
+
+当前 Plan 参考卡片统一复用 `shooting_plan_inspirations`，并通过 `inspiration_cards.card_type` 支持灵感卡 / 技巧卡。以下独立技巧卡关联表是早期设计记录。
 
 ```sql
 CREATE TABLE IF NOT EXISTS shooting_plan_techniques (
@@ -299,23 +305,28 @@ CREATE TABLE IF NOT EXISTS media_assets (
 target_type 枚举建议：
 
 - inspiration
-- technique
-- project
-- plan
+- shooting_plan
+- technique（历史 / 兼容枚举，当前主流程不写入）
+- project（历史 / 兼容枚举，当前主流程不写入）
+- plan（历史 / 兼容枚举，当前主流程不写入）
 
 source_type 枚举建议：
 
 - file_picker
 - clipboard
 - drag_drop
+- local
 
 说明：
 
-- target_id 可为空，用于支持“先上传图片，再保存卡片”的表单流程
-- 卡片保存后，应将 media_assets.target_id 更新为对应卡片 id
-- 一张卡片可通过 target_type + target_id 查询多张图片
-- `sort_order` 用于卡片图集排序；查询卡片图片时按 `sort_order ASC, created_at ASC`
-- 删除 media_assets 记录不删除真实文件；如果删除的是当前卡片封面，业务层清空 `cover_media_asset_id` 并回退到第一张图
+- Card Library 图片统一使用 `target_type = inspiration`，即使该卡片是 `card_type = technique`
+- Shooting Plan 图片统一使用 `target_type = shooting_plan`
+- target_id 可为空，用于支持“先上传图片，再保存对象”的表单流程
+- 对象保存后，应将 media_assets.target_id 更新为对应对象 id
+- 一个对象可通过 target_type + target_id 查询多张图片
+- `sort_order` 用于图集排序；查询图片时按 `sort_order ASC, created_at ASC`
+- 删除 media_assets 记录不删除真实文件；如果删除的是当前卡片或 Plan 封面，业务层清空对应 `cover_media_asset_id` 并回退到第一张图
+- 不删除真实文件是保守策略，用于避免误删用户素材；后续通过孤儿文件检查 / 安全清理功能处理媒体目录维护
 
 ## 12. 索引
 
@@ -426,3 +437,15 @@ ON tags(category);
 - 人像引导
 - 后期处理
 - 器材使用
+
+## 14. Migration 策略
+
+当前 migration 机制适合 MVP 阶段的增量 schema 补齐：
+
+- 启动时创建缺失表
+- 使用幂等 SQL / `CREATE TABLE IF NOT EXISTS`
+- 使用 `PRAGMA table_info` 检查缺失列并补齐
+- 使用 `PRAGMA user_version` 标记当前 schema 版本
+- 使用 `INSERT OR IGNORE` 初始化预设数据
+
+本阶段不做表重命名 migration，也不把 `inspiration_cards` / `shooting_plan_inspirations` 重命名为新的产品概念表。后续 P1 技术债建议升级为版本化 SQL migration 或 `schema_migrations` 表，以便支持更复杂的 schema 演进、回滚审计和数据迁移验证。

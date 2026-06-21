@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useSearchParams } from "react-router-dom";
 
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CardType, InspirationCard, SourcePlatform } from "../services/inspirationApi";
 import {
   getMediaAsset,
@@ -1056,21 +1057,6 @@ export default function ProjectsPage() {
                     </div>
                   </header>
 
-                  {pendingDeleteProject?.id === project.id && (
-                    <div className="inline-confirm">
-                      <p>
-                        确定删除 Project「{project.name}」吗？
-                        {projectPlans.length > 0 ? ` 该 Project 下的 ${projectPlans.length} 个 Plan 也会被删除。` : ""}
-                      </p>
-                      <div className="row-actions">
-                        <button className="danger-button" type="button" onClick={() => void confirmDeleteProject()}>
-                          确认删除
-                        </button>
-                        <button type="button" onClick={() => setPendingDeleteProject(null)}>取消</button>
-                      </div>
-                    </div>
-                  )}
-
                   {isExpanded && (
                     <div className="project-directory-body">
                       <div className="project-plan-card-grid">
@@ -1138,7 +1124,6 @@ export default function ProjectsPage() {
           referenceCount={referenceCounts[selectedPlan.id] ?? 0}
           brokenCoverIds={brokenCoverIds}
           inspirationCoverMap={inspirationCoverMap}
-          pendingDeletePlan={pendingDeletePlan}
           preview={
             planReferencePreviewMap[selectedPlan.id] ?? {
               cards: [],
@@ -1155,8 +1140,6 @@ export default function ProjectsPage() {
           onOpenReferenceDetail={openInspirationDetail}
           onReferenceBroken={markCoverBroken}
           onDelete={() => setPendingDeletePlan(selectedPlan)}
-          onCancelDelete={() => setPendingDeletePlan(null)}
-          onConfirmDelete={() => void confirmDeletePlan()}
         />
       )}
 
@@ -1212,6 +1195,46 @@ export default function ProjectsPage() {
           }
         />
       )}
+
+      <ConfirmDialog
+        danger
+        confirmLabel="确认删除"
+        detail={
+          pendingDeleteProject
+            ? `删除 Project 可能会影响其下的 Plans 组织关系。${
+                plansByProject[pendingDeleteProject.id]?.length
+                  ? `当前 Project 下的 ${
+                      plansByProject[pendingDeleteProject.id].length
+                    } 个 Plan 也会被删除。`
+                  : ""
+              }`
+            : undefined
+        }
+        message={
+          pendingDeleteProject
+            ? `将删除 Project「${pendingDeleteProject.name}」。`
+            : undefined
+        }
+        open={Boolean(pendingDeleteProject)}
+        title="删除 Project？"
+        onCancel={() => setPendingDeleteProject(null)}
+        onConfirm={() => void confirmDeleteProject()}
+      />
+
+      <ConfirmDialog
+        danger
+        confirmLabel="确认删除"
+        detail="这会删除该拍摄计划及其参考卡片关联，但不会删除本地真实媒体文件。"
+        message={
+          pendingDeletePlan
+            ? `将删除 Plan「${pendingDeletePlan.title}」。`
+            : undefined
+        }
+        open={Boolean(pendingDeletePlan)}
+        title="删除 Plan？"
+        onCancel={() => setPendingDeletePlan(null)}
+        onConfirm={() => void confirmDeletePlan()}
+      />
     </section>
   );
 }
@@ -1506,30 +1529,24 @@ function PlanDetailModal({
   preview,
   inspirationCoverMap,
   brokenCoverIds,
-  pendingDeletePlan,
   onClose,
   onEdit,
   onManageReferences,
   onOpenReferenceDetail,
   onReferenceBroken,
   onDelete,
-  onCancelDelete,
-  onConfirmDelete,
 }: {
   plan: ShootingPlan;
   referenceCount: number;
   preview: PlanReferencePreview;
   inspirationCoverMap: Record<string, MediaAsset | null>;
   brokenCoverIds: Set<string>;
-  pendingDeletePlan: ShootingPlan | null;
   onClose: () => void;
   onEdit: () => void;
   onManageReferences: () => void;
   onOpenReferenceDetail: (card: InspirationCard) => void;
   onReferenceBroken: (cardId: string) => void;
   onDelete: () => void;
-  onCancelDelete: () => void;
-  onConfirmDelete: () => void;
 }) {
   return (
     <div className="reference-modal-overlay" role="presentation">
@@ -1585,15 +1602,6 @@ function PlanDetailModal({
             </button>
             <button className="danger-button" type="button" onClick={onDelete}>删除 Plan</button>
           </div>
-          {pendingDeletePlan?.id === plan.id && (
-            <div className="inline-confirm">
-              <p>确定删除拍摄计划「{plan.title}」吗？</p>
-              <div className="row-actions">
-                <button className="danger-button" type="button" onClick={onConfirmDelete}>确认删除</button>
-                <button type="button" onClick={onCancelDelete}>取消</button>
-              </div>
-            </div>
-          )}
         </div>
       </section>
     </div>

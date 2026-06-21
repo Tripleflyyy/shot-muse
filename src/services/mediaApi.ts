@@ -1,6 +1,9 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 export type MediaTargetType =
+  // Current workflow: Card Library images use "inspiration" for both
+  // inspiration and technique cards; Shooting Plan images use "shooting_plan".
+  // Other values remain for backward compatibility with early media APIs.
   | "inspiration"
   | "technique"
   | "project"

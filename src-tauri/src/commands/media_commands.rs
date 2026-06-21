@@ -10,6 +10,9 @@ use crate::repositories::{inspiration_repository, media_repository, shooting_pla
 use crate::state::AppState;
 
 const VALID_TARGET_TYPES: &[&str] = &[
+    // Current workflow uses "inspiration" for Card Library images and
+    // "shooting_plan" for Shooting Plan images. The other values remain
+    // accepted for backward compatibility with early media APIs.
     "inspiration",
     "technique",
     "project",
@@ -579,8 +582,14 @@ mod tests {
                 .expect("import shooting plan image");
 
         assert_eq!(imported.target_type, "shooting_plan");
-        assert_eq!(imported.target_id.as_deref(), Some(shooting_plan_id.as_str()));
-        assert_eq!(imported.original_filename.as_deref(), Some("plan-cover.png"));
+        assert_eq!(
+            imported.target_id.as_deref(),
+            Some(shooting_plan_id.as_str())
+        );
+        assert_eq!(
+            imported.original_filename.as_deref(),
+            Some("plan-cover.png")
+        );
         assert_eq!(imported.mime_type.as_deref(), Some("image/png"));
         assert_eq!(imported.source_type, "local");
         assert!(Path::new(&imported.file_path).exists());
@@ -594,7 +603,10 @@ mod tests {
             })
             .expect("get shooting plan")
             .expect("shooting plan exists");
-        assert_eq!(plan.cover_media_asset_id.as_deref(), Some(imported.id.as_str()));
+        assert_eq!(
+            plan.cover_media_asset_id.as_deref(),
+            Some(imported.id.as_str())
+        );
     }
 
     #[test]
@@ -626,13 +638,10 @@ mod tests {
         let source_path = source_dir.join("plan-cover.jpg");
         write_fake_image(&source_path);
 
-        assert!(import_shooting_plan_image_with_paths(
-            &state,
-            &source_path,
-            "missing-plan",
-            true,
-        )
-        .is_err());
+        assert!(
+            import_shooting_plan_image_with_paths(&state, &source_path, "missing-plan", true,)
+                .is_err()
+        );
 
         let shooting_plan_id = create_shooting_plan(&state);
         let invalid_path = source_dir.join("plan-cover.gif");
