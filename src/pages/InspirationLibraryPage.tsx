@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useSearchParams } from "react-router-dom";
 
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import {
   CardType,
   createInspirationCard,
@@ -950,23 +951,44 @@ export default function InspirationLibraryPage() {
                   onRemoveMedia={requestRemoveMedia}
                   onSelectMedia={setActiveMediaAssetId}
                   onSetCover={(asset) => void handleSetCardCover(asset)}
-                  pendingDeleteCard={pendingDeleteCard}
-                  onCancelDelete={() => setPendingDeleteCard(null)}
-                  onConfirmDelete={() => void confirmDeleteCard()}
                 />
               ) : null}
             </div>
-
-            {pendingRemoveMedia && (
-              <MediaRemovalConfirmModal
-                asset={pendingRemoveMedia.asset}
-                onCancel={() => setPendingRemoveMedia(null)}
-                onConfirm={() => void confirmRemoveMedia()}
-              />
-            )}
           </section>
         </div>
       )}
+
+      <ConfirmDialog
+        danger
+        confirmLabel="确认删除"
+        detail="这会删除卡片记录及其关联关系，但不会删除本地真实媒体文件。"
+        message={
+          pendingDeleteCard
+            ? `将删除卡片「${pendingDeleteCard.title}」。`
+            : undefined
+        }
+        open={Boolean(pendingDeleteCard)}
+        title="删除卡片？"
+        onCancel={() => setPendingDeleteCard(null)}
+        onConfirm={() => void confirmDeleteCard()}
+      />
+
+      <ConfirmDialog
+        danger
+        confirmLabel="确认移除"
+        detail="仅从卡片中移除记录，不会删除本地真实文件。"
+        message={
+          pendingRemoveMedia
+            ? `将从卡片中移除图片「${
+                pendingRemoveMedia.asset.original_filename ?? "本地图片"
+              }」。`
+            : undefined
+        }
+        open={Boolean(pendingRemoveMedia)}
+        title="确认移除图片"
+        onCancel={() => setPendingRemoveMedia(null)}
+        onConfirm={() => void confirmRemoveMedia()}
+      />
     </section>
   );
 }
@@ -1522,14 +1544,11 @@ function CardDetail({
   importingCardId,
   mediaAssets,
   onAddImage,
-  onCancelDelete,
-  onConfirmDelete,
   onDelete,
   onMoveMedia,
   onRemoveMedia,
   onSelectMedia,
   onSetCover,
-  pendingDeleteCard,
 }: {
   card: InspirationCard;
   activeMediaAssetId: string | null;
@@ -1537,14 +1556,11 @@ function CardDetail({
   importingCardId: string | null;
   mediaAssets: MediaAsset[];
   onAddImage: () => void;
-  onCancelDelete: () => void;
-  onConfirmDelete: () => void;
   onDelete: () => void;
   onMoveMedia: (asset: MediaAsset, direction: -1 | 1) => void;
   onRemoveMedia: (cardId: string, asset: MediaAsset) => void;
   onSelectMedia: (mediaAssetId: string) => void;
   onSetCover: (asset: MediaAsset) => void;
-  pendingDeleteCard: InspirationCard | null;
 }) {
   return (
     <div className="card-detail-content">
@@ -1624,20 +1640,6 @@ function CardDetail({
           删除卡片
         </button>
       </div>
-
-      {pendingDeleteCard?.id === card.id && (
-        <div className="inline-confirm">
-          <p>确定删除卡片「{card.title}」吗？</p>
-          <div className="row-actions">
-            <button className="danger-button" type="button" onClick={onConfirmDelete}>
-              确认删除
-            </button>
-            <button type="button" onClick={onCancelDelete}>
-              取消
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1813,45 +1815,6 @@ function CardMediaStrip({
         </div>
       )}
     </>
-  );
-}
-
-function MediaRemovalConfirmModal({
-  asset,
-  onCancel,
-  onConfirm,
-}: {
-  asset: MediaAsset;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="confirm-overlay media-removal-confirm-overlay">
-      <div
-        aria-labelledby="media-removal-confirm-title"
-        aria-modal="true"
-        className="confirm-dialog"
-        role="dialog"
-      >
-        <h3 className="confirm-dialog-title" id="media-removal-confirm-title">
-          确认移除图片
-        </h3>
-        <p className="confirm-dialog-message">
-          将从卡片中移除图片「{asset.original_filename ?? "本地图片"}」。
-        </p>
-        <p className="confirm-dialog-note">
-          仅从卡片中移除记录，不会删除本地真实文件。
-        </p>
-        <div className="confirm-dialog-actions">
-          <button className="danger-button" type="button" onClick={onConfirm}>
-            确认移除
-          </button>
-          <button type="button" onClick={onCancel}>
-            取消
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 

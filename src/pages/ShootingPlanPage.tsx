@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useSearchParams } from "react-router-dom";
 
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CardType, InspirationCard, SourcePlatform } from "../services/inspirationApi";
 import {
   getMediaAssetDisplayUrl,
@@ -1386,26 +1387,6 @@ export default function ShootingPlanPage() {
                     </button>
                   </div>
 
-                  {pendingDeletePlan?.id === selectedPlanForDetail.id && (
-                    <div className="inline-confirm">
-                      <p>确定删除拍摄计划「{selectedPlanForDetail.title}」吗？</p>
-                      <div className="row-actions">
-                        <button
-                          className="danger-button"
-                          type="button"
-                          onClick={() => void confirmDeletePlan()}
-                        >
-                          确认删除
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPendingDeletePlan(null)}
-                        >
-                          取消
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -1679,6 +1660,21 @@ export default function ShootingPlanPage() {
           }
         />
       )}
+
+      <ConfirmDialog
+        danger
+        confirmLabel="确认删除"
+        detail="这会删除该拍摄计划及其参考卡片关联，但不会删除本地真实媒体文件。"
+        message={
+          pendingDeletePlan
+            ? `将删除 Plan「${pendingDeletePlan.title}」。`
+            : undefined
+        }
+        open={Boolean(pendingDeletePlan)}
+        title="删除 Plan？"
+        onCancel={() => setPendingDeletePlan(null)}
+        onConfirm={() => void confirmDeletePlan()}
+      />
     </section>
   );
 }
