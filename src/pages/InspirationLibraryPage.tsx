@@ -540,20 +540,52 @@ export default function InspirationLibraryPage() {
     }
 
     const { cardId, asset } = pendingRemoveMedia;
+    const previousMediaAssets = sortedMediaAssets(cardMedia[cardId] ?? []);
+    const remainingMediaAssets = previousMediaAssets.filter((item) => item.id !== asset.id);
+    const wasActiveMedia = activeMediaAssetId === asset.id;
+    const wasCoverMedia = selectedCard?.cover_media_asset_id === asset.id;
 
     try {
       await deleteMediaAsset(asset.id);
       setPendingRemoveMedia(null);
-      await refreshCardMedia(cardId);
-      if (activeMediaAssetId === asset.id) {
-        const remaining = (cardMedia[cardId] ?? []).filter((item) => item.id !== asset.id);
-        setActiveMediaAssetId(defaultActiveMediaAssetId(selectedCard, remaining));
+
+      setCardMedia((current) => ({
+        ...current,
+        [cardId]: remainingMediaAssets,
+      }));
+
+      if (wasCoverMedia) {
+        setCards((current) =>
+          current.map((card) =>
+            card.id === cardId ? { ...card, cover_media_asset_id: null } : card,
+          ),
+        );
+        setSelectedCard((current) =>
+          current?.id === cardId ? { ...current, cover_media_asset_id: null } : current,
+        );
       }
+
+      if (wasActiveMedia || !remainingMediaAssets.some((item) => item.id === activeMediaAssetId)) {
+        const nextCard = wasCoverMedia && selectedCard
+          ? { ...selectedCard, cover_media_asset_id: null }
+          : selectedCard;
+        setActiveMediaAssetId(defaultActiveMediaAssetId(nextCard, remainingMediaAssets));
+      }
+
       setImageActionStatus({
         cardId,
         message: "图片已从卡片移除",
       });
-      await loadCards();
+      const data = await listInspirationCards({
+        card_type: filters.card_type === "all" ? undefined : filters.card_type,
+        source_platform: filters.source_platform || undefined,
+        keyword: filters.keyword.trim() || undefined,
+        tag_ids: [],
+      });
+      setCards(data);
+      setSelectedCard((current) =>
+        current ? data.find((card) => card.id === current.id) ?? current : current,
+      );
     } catch (error) {
       console.error("移除图片失败", error);
       const message = toErrorMessage(error, "移除图片失败");
@@ -888,7 +920,6 @@ export default function InspirationLibraryPage() {
                   onRemovePendingCreateImage={removePendingCreateImage}
                   onRemoveMedia={selectedCard ? requestRemoveMedia : undefined}
                   onSubmit={handleSubmit}
-                  pendingRemoveMedia={pendingRemoveMedia}
                   activeMediaAssetId={activeMediaAssetId}
                   canCreateInlineTag={canCreateInlineTag}
                   existingInlineTag={existingInlineTag}
@@ -899,7 +930,6 @@ export default function InspirationLibraryPage() {
                   selectedTags={selectedTags}
                   tagSearchKeyword={tagSearchKeyword}
                   toggleTag={toggleFormTag}
-                  onConfirmRemoveMedia={() => void confirmRemoveMedia()}
                   onMoveMedia={(asset, direction) => void handleMoveMedia(asset, direction)}
                   onNewTagColorChange={setNewTagColor}
                   onRemoveTag={removeFormTag}
@@ -921,14 +951,19 @@ export default function InspirationLibraryPage() {
                   onSelectMedia={setActiveMediaAssetId}
                   onSetCover={(asset) => void handleSetCardCover(asset)}
                   pendingDeleteCard={pendingDeleteCard}
-                  pendingRemoveMedia={pendingRemoveMedia}
                   onCancelDelete={() => setPendingDeleteCard(null)}
-                  onCancelRemoveMedia={() => setPendingRemoveMedia(null)}
                   onConfirmDelete={() => void confirmDeleteCard()}
-                  onConfirmRemoveMedia={() => void confirmRemoveMedia()}
                 />
               ) : null}
             </div>
+
+            {pendingRemoveMedia && (
+              <MediaRemovalConfirmModal
+                asset={pendingRemoveMedia.asset}
+                onCancel={() => setPendingRemoveMedia(null)}
+                onConfirm={() => void confirmRemoveMedia()}
+              />
+            )}
           </section>
         </div>
       )}
@@ -1075,7 +1110,6 @@ function CardForm({
   onCancel,
   onChange,
   onCreateInlineTag,
-  onConfirmRemoveMedia,
   onMoveMedia,
   onNewTagColorChange,
   onRemoveMedia,
@@ -1084,7 +1118,6 @@ function CardForm({
   onSelectMedia,
   onSetCover,
   onSubmit,
-  pendingRemoveMedia,
   selectableTags,
   selectedTags,
   tagSearchKeyword,
@@ -1108,7 +1141,6 @@ function CardForm({
   onCancel: () => void;
   onChange: (updater: CardFormState | ((current: CardFormState) => CardFormState)) => void;
   onCreateInlineTag: () => void;
-  onConfirmRemoveMedia: () => void;
   onMoveMedia: (asset: MediaAsset, direction: -1 | 1) => void;
   onNewTagColorChange: (color: string) => void;
   onRemoveMedia?: (cardId: string, asset: MediaAsset) => void;
@@ -1117,7 +1149,6 @@ function CardForm({
   onSelectMedia: (mediaAssetId: string) => void;
   onSetCover: (asset: MediaAsset) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  pendingRemoveMedia: { cardId: string; asset: MediaAsset } | null;
   selectableTags: Tag[];
   selectedTags: Tag[];
   tagSearchKeyword: string;
@@ -1405,12 +1436,10 @@ function CardForm({
             coverMediaAssetId={coverMediaAssetId}
             imageActionStatus={imageActionStatus}
             mediaAssets={mediaAssets}
-            onConfirmRemoveMedia={onConfirmRemoveMedia}
             onMoveMedia={onMoveMedia}
             onRemoveMedia={onRemoveMedia}
             onSelectMedia={onSelectMedia}
             onSetCover={onSetCover}
-            pendingRemoveMedia={pendingRemoveMedia}
           />
         )}
       </section>
@@ -1494,16 +1523,13 @@ function CardDetail({
   mediaAssets,
   onAddImage,
   onCancelDelete,
-  onCancelRemoveMedia,
   onConfirmDelete,
-  onConfirmRemoveMedia,
   onDelete,
   onMoveMedia,
   onRemoveMedia,
   onSelectMedia,
   onSetCover,
   pendingDeleteCard,
-  pendingRemoveMedia,
 }: {
   card: InspirationCard;
   activeMediaAssetId: string | null;
@@ -1512,16 +1538,13 @@ function CardDetail({
   mediaAssets: MediaAsset[];
   onAddImage: () => void;
   onCancelDelete: () => void;
-  onCancelRemoveMedia: () => void;
   onConfirmDelete: () => void;
-  onConfirmRemoveMedia: () => void;
   onDelete: () => void;
   onMoveMedia: (asset: MediaAsset, direction: -1 | 1) => void;
   onRemoveMedia: (cardId: string, asset: MediaAsset) => void;
   onSelectMedia: (mediaAssetId: string) => void;
   onSetCover: (asset: MediaAsset) => void;
   pendingDeleteCard: InspirationCard | null;
-  pendingRemoveMedia: { cardId: string; asset: MediaAsset } | null;
 }) {
   return (
     <div className="card-detail-content">
@@ -1549,13 +1572,10 @@ function CardDetail({
           coverMediaAssetId={card.cover_media_asset_id}
           imageActionStatus={imageActionStatus}
           mediaAssets={mediaAssets}
-          onCancelRemoveMedia={onCancelRemoveMedia}
-          onConfirmRemoveMedia={onConfirmRemoveMedia}
           onMoveMedia={onMoveMedia}
           onRemoveMedia={onRemoveMedia}
           onSelectMedia={onSelectMedia}
           onSetCover={onSetCover}
-          pendingRemoveMedia={pendingRemoveMedia}
         />
       </section>
 
@@ -1627,25 +1647,19 @@ function CardMediaStrip({
   coverMediaAssetId,
   imageActionStatus,
   mediaAssets,
-  onCancelRemoveMedia,
-  onConfirmRemoveMedia,
   onMoveMedia,
   onRemoveMedia,
   onSelectMedia,
   onSetCover,
-  pendingRemoveMedia,
 }: {
   activeMediaAssetId: string | null;
   coverMediaAssetId: string | null;
   imageActionStatus: { cardId: string; message: string } | null;
   mediaAssets: MediaAsset[];
-  onCancelRemoveMedia?: () => void;
-  onConfirmRemoveMedia: () => void;
   onMoveMedia: (asset: MediaAsset, direction: -1 | 1) => void;
   onRemoveMedia?: (cardId: string, asset: MediaAsset) => void;
   onSelectMedia: (mediaAssetId: string) => void;
   onSetCover: (asset: MediaAsset) => void;
-  pendingRemoveMedia: { cardId: string; asset: MediaAsset } | null;
 }) {
   const orderedMediaAssets = sortedMediaAssets(mediaAssets);
   const activeIndex = Math.max(
@@ -1792,29 +1806,6 @@ function CardMediaStrip({
                   <span>{asset.original_filename ?? "本地图片"}</span>
                 </div>
 
-                {pendingRemoveMedia?.asset.id === asset.id && (
-                  <div className="inline-confirm">
-                    <p>
-                      确定从卡片中移除图片「
-                      {asset.original_filename ?? "本地图片"}」吗？
-                    </p>
-                    <div className="row-actions">
-                      <button
-                        className="danger-button"
-                        type="button"
-                        onClick={onConfirmRemoveMedia}
-                      >
-                        确认移除
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onCancelRemoveMedia?.()}
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1822,6 +1813,45 @@ function CardMediaStrip({
         </div>
       )}
     </>
+  );
+}
+
+function MediaRemovalConfirmModal({
+  asset,
+  onCancel,
+  onConfirm,
+}: {
+  asset: MediaAsset;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="confirm-overlay media-removal-confirm-overlay">
+      <div
+        aria-labelledby="media-removal-confirm-title"
+        aria-modal="true"
+        className="confirm-dialog"
+        role="dialog"
+      >
+        <h3 className="confirm-dialog-title" id="media-removal-confirm-title">
+          确认移除图片
+        </h3>
+        <p className="confirm-dialog-message">
+          将从卡片中移除图片「{asset.original_filename ?? "本地图片"}」。
+        </p>
+        <p className="confirm-dialog-note">
+          仅从卡片中移除记录，不会删除本地真实文件。
+        </p>
+        <div className="confirm-dialog-actions">
+          <button className="danger-button" type="button" onClick={onConfirm}>
+            确认移除
+          </button>
+          <button type="button" onClick={onCancel}>
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
